@@ -80,10 +80,20 @@ def search_material(client: NetshortClient, material_name: str) -> dict[str, Any
 def search_dubbed_dramas(
     client: NetshortClient, short_play_name: str, source_language: str
 ) -> list[dict[str, Any]]:
-    """Find all language versions under the AI-dubbed library."""
+    """Find all language versions of a drama, excluding the source language.
+
+    Some dramas use a bare library name (all languages returned directly),
+    others use "{name}(AI配音)" as the dubbed library name.
+    """
     candidates: list[dict[str, Any]] = []
-    for suffix in ["(AI配音)", "（AI配音）", "(AI Dubbed)"]:
-        search_name = f"{short_play_name}{suffix}"
+    search_names = [
+        short_play_name,
+        f"{short_play_name}(AI配音)",
+        f"{short_play_name}（AI配音）",
+        f"{short_play_name}(AI Dubbed)",
+    ]
+
+    for search_name in search_names:
         resp = client._client.get(
             "/video/shortPlay/pageList",
             params={
@@ -94,8 +104,7 @@ def search_dubbed_dramas(
             },
         )
         resp.raise_for_status()
-        data = resp.json()
-        rows = data.get("rows", [])
+        rows = resp.json().get("rows", [])
         if rows:
             for r in rows:
                 candidates.append({
