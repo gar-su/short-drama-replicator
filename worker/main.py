@@ -24,9 +24,25 @@ logger = get_logger(__name__)
 _CST = timezone(timedelta(hours=8))
 
 
+def _load_dotenv() -> None:
+    """Load .env file from project root into os.environ."""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+    with open(env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
 def _load_config() -> dict[str, str]:
     required = ["GITHUB_TOKEN", "GITHUB_REPO", "NETSHORT_TOKEN"]
-    config = {}
+    config: dict[str, str] = {}
     for key in required:
         value = os.environ.get(key, "")
         if not value:
@@ -96,6 +112,7 @@ def poll_and_execute() -> None:
 
 
 def main() -> None:
+    _load_dotenv()
     setup_logging()
     _load_config()  # Validate config early
 
