@@ -39,6 +39,7 @@ from PIL import Image
 import imagehash
 
 _COUNTER_FILE = Path.home() / ".config" / "short-drama-replicator" / "clip_counter.json"
+_ASR_CACHE_DIR = Path.home() / ".config" / "short-drama-replicator" / "asr_cache"
 
 _CLARITY_RANK = {"1080p": 3, "720p": 2, "540p": 1}
 
@@ -125,6 +126,39 @@ def search_dubbed_dramas(
 # ASR + VTT timestamp matching
 # ---------------------------------------------------------------------------
 
+def _asr_cache_path(short_play_id: str, episode: int) -> str:
+    return str(_ASR_CACHE_DIR / short_play_id / f"ep_{episode}.srt")
+
+
+def _asr_transcribe_episode(
+    client: NetshortClient, short_play_id: str, episode: int, work_dir: str
+) -> list[dict[str, Any]]:
+    """ASR transcribe a drama episode, caching the result. Returns subtitle list."""
+    cache_path = _asr_cache_path(short_play_id, episode)
+    if os.path.exists(cache_path):
+        logger.info("Using cached ASR for %s ep %d", short_play_id, episode)
+        with open(cache_path, encoding="utf-8") as f:
+            srt_content = f.read()
+    else:
+        logger.info("ASR transcribing %s ep %d ...", short_play_id, episode)
+        Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
+        ep_data = client.get_episode(short_play_id, episode)
+        voucher_url = _pick_best_voucher(ep_data["episodeVoucherVos"])
+        video_path = os.path.join(work_dir, f"asr_ep_{episode}.mp4")
+        client.download_file(voucher_url, video_path)
+        srt_content = _asr_transcribe(video_path, cache_path)
+        os.remove(video_path)
+
+    import srt as srt_module
+    subs = list(srt_module.parse(srt_content))
+    return [
+        {"index": i, "start_ms": int(sub.start.total_seconds() * 1000),
+         "end_ms": int(sub.end.total_seconds() * 1000), "text": sub.content.replace("\n", " "),
+         "episode": episode}
+        for i, sub in enumerate(subs)
+    ]
+
+
 def _asr_transcribe(video_path: str, output_srt: str) -> str:
     """Transcribe video to SRT using videocaptioner. Returns SRT text."""
     result = subprocess.run(
@@ -183,7 +217,7 @@ def _find_best_match_window(
 def get_source_timestamps(
     client: NetshortClient, material_url: str, source_short_play_id: str, work_dir: str
 ) -> tuple[int, int]:
-    """ASR the source material, match against source drama VTT, return (start_ms, end_ms)."""
+    """ASR the source material, match against source drama subtitles (VTT or ASR cached)."""
     material_path = os.path.join(work_dir, "source_material.mp4")
     client.download_file(material_url, material_path)
 
@@ -194,7 +228,9 @@ def get_source_timestamps(
 
     source_drama = client.get_short_play(source_short_play_id)
     pay_point = source_drama["payPoint"]
-    all_vtt_subs: list[dict[str, Any]] = []
+
+    # Try VTT subtitles first
+    all_subs: list[dict[str, Any]] = []
     for ep in range(1, pay_point):
         try:
             url = client.get_subtitle_url(source_short_play_id, ep)
@@ -202,18 +238,29 @@ def get_source_timestamps(
             subs = _vtt_to_subtitle_list(vtt_text)
             for sub in subs:
                 sub["episode"] = ep
-            all_vtt_subs.extend(subs)
+            all_subs.extend(subs)
         except RuntimeError:
             continue
 
-    if not all_vtt_subs:
-        raise RuntimeError("No VTT subtitles found for source drama")
+    if all_subs:
+        logger.info("Using VTT subtitles: %d lines across %d episodes", len(all_subs), pay_point)
+    else:
+        logger.info("No VTT available, building ASR cache for %d episodes...", pay_point)
+        for ep in range(1, pay_point):
+            try:
+                ep_subs = _asr_transcribe_episode(client, source_short_play_id, ep, work_dir)
+                all_subs.extend(ep_subs)
+            except Exception as e:
+                logger.error("ASR failed for ep %d: %s", ep, e)
 
-    start_idx = _find_best_match_window(asr_text, all_vtt_subs, is_start=True)
-    end_idx = _find_best_match_window(asr_text, all_vtt_subs, is_start=False)
+    if not all_subs:
+        raise RuntimeError("No subtitles (VTT or ASR) available for source drama")
 
-    start_ms = all_vtt_subs[start_idx]["start_ms"]
-    end_ms = all_vtt_subs[min(end_idx + 1, len(all_vtt_subs) - 1)]["end_ms"]
+    start_idx = _find_best_match_window(asr_text, all_subs, is_start=True)
+    end_idx = _find_best_match_window(asr_text, all_subs, is_start=False)
+
+    start_ms = all_subs[start_idx]["start_ms"]
+    end_ms = all_subs[min(end_idx + 1, len(all_subs) - 1)]["end_ms"]
 
     logger.info("Source timestamps: %dms - %dms (%.1fs)", start_ms, end_ms, (end_ms - start_ms) / 1000)
     return start_ms, end_ms
