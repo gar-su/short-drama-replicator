@@ -217,19 +217,14 @@ def _find_best_match_window(
 def get_source_timestamps(
     client: NetshortClient, material_url: str, source_short_play_id: str, work_dir: str
 ) -> tuple[int, int]:
-    """ASR the source material, match against source drama subtitles (VTT or ASR cached)."""
+    """Get clip timestamps in source drama timeline via VTT/ASR or frame matching."""
     material_path = os.path.join(work_dir, "source_material.mp4")
     client.download_file(material_url, material_path)
-
-    srt_path = os.path.join(work_dir, "source_asr.srt")
-    srt_content = _asr_transcribe(material_path, srt_path)
-    asr_text = _srt_to_plain_text(srt_content)
-    logger.info("ASR transcript length: %d chars", len(asr_text))
 
     source_drama = client.get_short_play(source_short_play_id)
     pay_point = source_drama["payPoint"]
 
-    # Try VTT subtitles first
+    # Try VTT subtitles first (fast text matching)
     all_subs: list[dict[str, Any]] = []
     for ep in range(1, pay_point):
         try:
@@ -244,26 +239,76 @@ def get_source_timestamps(
 
     if all_subs:
         logger.info("Using VTT subtitles: %d lines across %d episodes", len(all_subs), pay_point)
-    else:
-        logger.info("No VTT available, building ASR cache for %d episodes...", pay_point)
-        for ep in range(1, pay_point):
-            try:
-                ep_subs = _asr_transcribe_episode(client, source_short_play_id, ep, work_dir)
-                all_subs.extend(ep_subs)
-            except Exception as e:
-                logger.error("ASR failed for ep %d: %s", ep, e)
+        srt_path = os.path.join(work_dir, "source_asr.srt")
+        srt_content = _asr_transcribe(material_path, srt_path)
+        asr_text = _srt_to_plain_text(srt_content)
+        logger.info("ASR transcript length: %d chars", len(asr_text))
+        start_idx = _find_best_match_window(asr_text, all_subs, is_start=True)
+        end_idx = _find_best_match_window(asr_text, all_subs, is_start=False)
+        start_ms = all_subs[start_idx]["start_ms"]
+        end_ms = all_subs[min(end_idx + 1, len(all_subs) - 1)]["end_ms"]
+        logger.info("Source timestamps (VTT): %dms - %dms (%.1fs)", start_ms, end_ms, (end_ms - start_ms) / 1000)
+        return start_ms, end_ms
 
-    if not all_subs:
-        raise RuntimeError("No subtitles (VTT or ASR) available for source drama")
+    # Fall back to frame matching on source drama episodes
+    logger.info("No VTT available, using frame matching on %d episodes...", pay_point)
+    ref_first_hash = _compute_dhash(_extract_frame_ref(material_path, 0, work_dir, "ref_first"))
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", material_path],
+        capture_output=True, text=True,
+    )
+    source_duration_ms = int(float(probe.stdout.strip()) * 1000)
+    ref_last_hash = _compute_dhash(_extract_frame_ref(material_path, max(0, source_duration_ms - 500), work_dir, "ref_last"))
+    if ref_first_hash is None or ref_last_hash is None:
+        raise RuntimeError("Failed to compute reference frame hashes")
 
-    start_idx = _find_best_match_window(asr_text, all_subs, is_start=True)
-    end_idx = _find_best_match_window(asr_text, all_subs, is_start=False)
+    search_interval = 3000  # coarse: 3 seconds
+    for ep in range(1, pay_point):
+        logger.info("Searching episode %d/%d...", ep, pay_point)
+        try:
+            ep_data = client.get_episode(source_short_play_id, ep)
+            voucher_url = _pick_best_voucher(ep_data["episodeVoucherVos"])
+            ep_path = os.path.join(work_dir, f"src_ep_{ep}.mp4")
+            client.download_file(voucher_url, ep_path)
+            probe_ep = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", ep_path],
+                capture_output=True, text=True,
+            )
+            ep_duration_ms = int(float(probe_ep.stdout.strip()) * 1000)
 
-    start_ms = all_subs[start_idx]["start_ms"]
-    end_ms = all_subs[min(end_idx + 1, len(all_subs) - 1)]["end_ms"]
+            first_match = _find_best_frame_match(
+                ep_path, ref_first_hash, 0, ep_duration_ms, search_interval, work_dir,
+            )
+            if first_match is None:
+                logger.info("First frame not found in episode %d, trying next...", ep)
+                os.remove(ep_path)
+                continue
 
-    logger.info("Source timestamps: %dms - %dms (%.1fs)", start_ms, end_ms, (end_ms - start_ms) / 1000)
-    return start_ms, end_ms
+            last_match = _find_best_frame_match(
+                ep_path, ref_last_hash, 0, ep_duration_ms, search_interval, work_dir,
+            )
+            os.remove(ep_path)
+
+            if last_match is not None:
+                start_ms, start_sim = first_match
+                end_ms, end_sim = last_match
+                logger.info("Source timestamps (frame match ep %d): %dms - %dms, sim=%.3f/%.3f",
+                          ep, start_ms, end_ms, start_sim, end_sim)
+                return start_ms, end_ms
+
+            logger.info("Last frame not found in episode %d, trying next...", ep)
+        except Exception as e:
+            logger.error("Episode %d search failed: %s", ep, e)
+            continue
+
+    raise RuntimeError("Could not locate clip in any source drama episode")
+
+
+def _extract_frame_ref(video_path: str, timestamp_ms: int, work_dir: str, tag: str) -> str:
+    """Extract a reference frame and return its path."""
+    out = os.path.join(work_dir, f"{tag}.png")
+    _extract_frame(video_path, timestamp_ms, out)
+    return out
 
 
 # ---------------------------------------------------------------------------
