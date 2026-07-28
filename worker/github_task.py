@@ -69,7 +69,10 @@ def _delete_file(
     message: str,
 ) -> None:
     url = f"{_api_base(repo)}/{path}"
-    resp = client.delete(url, headers=_api_headers(token), json={"message": message, "sha": sha})
+    resp = client.request(
+        "DELETE", url, headers=_api_headers(token),
+        json={"message": message, "sha": sha},
+    )
     resp.raise_for_status()
 
 
