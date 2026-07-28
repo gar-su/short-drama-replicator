@@ -603,13 +603,11 @@ def replicate(
         for target in targets:
             target_lang = target["language"]
             target_id = target["shortPlayId"]
-            target_remark = target["remark"]
+            target_remark = target["remark"] or "XX"
 
             logger.info("Processing %s (%s)...", target_lang, target_id)
 
             try:
-                target_drama = client.get_short_play(target_id)
-                pay_point = target_drama["payPoint"]
                 episode = client.get_episode(target_id, 1)
                 voucher_url = _pick_best_voucher(episode["episodeVoucherVos"])
                 target_video_path = os.path.join(episodes_dir, f"{target_lang}_{target_id}_ep1.mp4")
