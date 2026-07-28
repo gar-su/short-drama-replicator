@@ -404,14 +404,24 @@ def _pick_best_voucher(vouchers: list[dict[str, Any]]) -> str:
     return str(ranked[0]["playVoucher"])
 
 
+_ENDING_LANG_MAP = {
+    "ja": "jp",
+    "ko": "kr",
+    "vi": "vn",
+}
+
+
 def _pick_ending(endings_dir: str, language: str) -> str | None:
     """Pick a random ending video for the given language."""
     if not endings_dir or not os.path.isdir(endings_dir):
         return None
     lang_prefix = language[:2].lower()
+    lookup = lang_prefix
+    if lookup in _ENDING_LANG_MAP:
+        lookup = _ENDING_LANG_MAP[lookup]
     endings = [
         f for f in os.listdir(endings_dir)
-        if f.lower().startswith(lang_prefix) and f.endswith(".mp4")
+        if f.lower().startswith(lookup) and f.endswith(".mp4")
     ]
     if not endings:
         return None
