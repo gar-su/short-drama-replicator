@@ -252,24 +252,39 @@ def get_source_timestamps(
 
     # Fall back to frame matching on source drama episodes
     logger.info("No VTT available, using frame matching on %d episodes...", pay_point)
-    ref_first_hash = _compute_dhash(_extract_frame_ref(material_path, 0, work_dir, "ref_first"))
+
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", material_path],
         capture_output=True, text=True,
     )
     source_duration_ms = int(float(probe.stdout.strip()) * 1000)
-    ref_last_hash = _compute_dhash(_extract_frame_ref(material_path, max(0, source_duration_ms - 500), work_dir, "ref_last"))
+
+    # Use a frame from 5 seconds in (not frame 0, which may be a transition)
+    ref_frame_ms = min(5000, source_duration_ms // 4)
+    ref_first_hash = _compute_dhash(_extract_frame_ref(material_path, ref_frame_ms, work_dir, "ref"))
+
+    # Also get hash from 10s before end (not the very last frame)
+    ref_end_ms = max(0, source_duration_ms - 10000)
+    ref_last_hash = _compute_dhash(_extract_frame_ref(material_path, ref_end_ms, work_dir, "ref_end"))
+
     if ref_first_hash is None or ref_last_hash is None:
         raise RuntimeError("Failed to compute reference frame hashes")
 
-    search_interval = 3000  # coarse: 3 seconds
+    # Phase 1: find start frame in any episode
+    search_interval = 3000
+    found_start_ms: int | None = None
+    found_ep: int | None = None
+    ep_paths: dict[int, str] = {}
+
     for ep in range(1, pay_point):
-        logger.info("Searching episode %d/%d...", ep, pay_point)
+        logger.info("Searching episode %d/%d for start frame...", ep, pay_point)
         try:
             ep_data = client.get_episode(source_short_play_id, ep)
             voucher_url = _pick_best_voucher(ep_data["episodeVoucherVos"])
             ep_path = os.path.join(work_dir, f"src_ep_{ep}.mp4")
             client.download_file(voucher_url, ep_path)
+            ep_paths[ep] = ep_path
+
             probe_ep = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", ep_path],
                 capture_output=True, text=True,
@@ -279,29 +294,97 @@ def get_source_timestamps(
             first_match = _find_best_frame_match(
                 ep_path, ref_first_hash, 0, ep_duration_ms, search_interval, work_dir,
             )
-            if first_match is None:
-                logger.info("First frame not found in episode %d, trying next...", ep)
-                os.remove(ep_path)
-                continue
-
-            last_match = _find_best_frame_match(
-                ep_path, ref_last_hash, 0, ep_duration_ms, search_interval, work_dir,
-            )
-            os.remove(ep_path)
-
-            if last_match is not None:
-                start_ms, start_sim = first_match
-                end_ms, end_sim = last_match
-                logger.info("Source timestamps (frame match ep %d): %dms - %dms, sim=%.3f/%.3f",
-                          ep, start_ms, end_ms, start_sim, end_sim)
-                return start_ms, end_ms
-
-            logger.info("Last frame not found in episode %d, trying next...", ep)
+            if first_match is not None and first_match[1] > 0.85:
+                found_start_ms = first_match[0] - ref_frame_ms
+                found_ep = ep
+                logger.info("Found start frame in episode %d at %dms (sim=%.3f)",
+                          ep, found_start_ms, first_match[1])
+                break
         except Exception as e:
             logger.error("Episode %d search failed: %s", ep, e)
-            continue
 
-    raise RuntimeError("Could not locate clip in any source drama episode")
+    if found_start_ms is None:
+        _cleanup_episodes(ep_paths)
+        raise RuntimeError("Could not locate clip start in any source drama episode")
+
+    # Phase 2: estimated end = start + clip_duration, search nearby for last frame
+    estimated_end_ms = found_start_ms + source_duration_ms
+    logger.info("Estimated end: %dms (start=%d + duration=%d)", estimated_end_ms, found_start_ms, source_duration_ms)
+
+    # Build cumulative episode offsets to map global timestamps to episodes
+    cumulative = 0
+    ep_boundaries: list[tuple[int, int, int]] = []  # (ep, global_start, global_end)
+    for ep in range(1, pay_point):
+        if ep in ep_paths:
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", ep_paths[ep]],
+                capture_output=True, text=True,
+            )
+            dur = int(float(probe.stdout.strip()) * 1000)
+            ep_boundaries.append((ep, cumulative, cumulative + dur))
+            cumulative += dur
+        elif ep > found_ep:
+            # Haven't downloaded future episodes yet
+            ep_data = client.get_episode(source_short_play_id, ep)
+            voucher_url = _pick_best_voucher(ep_data["episodeVoucherVos"])
+            ep_path = os.path.join(work_dir, f"src_ep_{ep}.mp4")
+            client.download_file(voucher_url, ep_path)
+            ep_paths[ep] = ep_path
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", ep_path],
+                capture_output=True, text=True,
+            )
+            dur = int(float(probe.stdout.strip()) * 1000)
+            ep_boundaries.append((ep, cumulative, cumulative + dur))
+            cumulative += dur
+        else:
+            # Earlier episodes we didn't download — approximate with average
+            dur = int(cumulative / max(found_ep - 1, 1))
+            ep_boundaries.append((ep, cumulative, cumulative + dur))
+            cumulative += dur
+
+    # Find which episode contains estimated_end_ms
+    end_ep = found_ep
+    for ep, gs, ge in ep_boundaries:
+        if gs <= estimated_end_ms < ge:
+            end_ep = ep
+            break
+
+    # Search for end frame near estimated position
+    search_window = 60000  # ±60 seconds
+    for ep, gs, ge in ep_boundaries:
+        if ep < end_ep:
+            continue
+        ep_path = ep_paths.get(ep)
+        if ep_path is None:
+            continue
+        search_start = max(0, estimated_end_ms - gs - search_window)
+        search_end = min(ge - gs, estimated_end_ms - gs + search_window)
+        if search_end <= 0:
+            continue
+        logger.info("Searching end frame in episode %d [%d, %d]ms...", ep, search_start, search_end)
+        last_match = _find_best_frame_match(
+            ep_path, ref_last_hash, search_start, search_end, 1000, work_dir,
+        )
+        if last_match is not None and last_match[1] > 0.80:
+            actual_end_ms = gs + last_match[0] + (source_duration_ms - ref_end_ms)
+            _cleanup_episodes(ep_paths)
+            logger.info("Source timestamps (frame match): %dms - %dms, sim=%.3f",
+                      found_start_ms, actual_end_ms, last_match[1])
+            return found_start_ms, actual_end_ms
+
+    # Fallback: use estimated end
+    logger.warning("Could not match end frame precisely, using estimated end")
+    _cleanup_episodes(ep_paths)
+    return found_start_ms, estimated_end_ms
+
+
+def _cleanup_episodes(paths: dict[int, str]) -> None:
+    for p in paths.values():
+        try:
+            os.remove(p)
+        except OSError:
+            pass
 
 
 def _extract_frame_ref(video_path: str, timestamp_ms: int, work_dir: str, tag: str) -> str:
