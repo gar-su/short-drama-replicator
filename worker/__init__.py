@@ -1,0 +1,1 @@
+# Short drama replicator worker
