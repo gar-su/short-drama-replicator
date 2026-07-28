@@ -431,7 +431,11 @@ def _find_best_frame_match(
     best_distance = 999
     max_distance = 256
 
-    for ts in range(search_start_ms, search_end_ms + interval_ms, interval_ms):
+    # Include search_end_ms in samples (range is exclusive at end, so +interval_ms)
+    sample_points = list(range(search_start_ms, search_end_ms, interval_ms))
+    if sample_points and sample_points[-1] < search_end_ms:
+        sample_points.append(search_end_ms)
+    for ts in sample_points:
         frame_path = os.path.join(work_dir, f"frame_{ts}.png")
         if not _extract_frame(video_path, ts, frame_path):
             continue
@@ -709,7 +713,6 @@ def replicate(
 
     material = search_material(client, material_name)
     source_lang = material["language"]
-    source_short_play_id = material["videoId"]
     folder_id = material["folderId"]
     source_url = material["url"]
     short_play_name = material["shortPlayName"]
@@ -725,18 +728,25 @@ def replicate(
 
     work_dir = tempfile.mkdtemp(prefix="replicate_")
     try:
-        source_start_ms, source_end_ms = get_source_timestamps(
-            client, source_url, source_short_play_id, work_dir
-        )
-
+        # Download source material and extract reference frame hash
         source_material_path = os.path.join(work_dir, "source_material.mp4")
-        if not os.path.exists(source_material_path):
-            client.download_file(source_url, source_material_path)
+        client.download_file(source_url, source_material_path)
+
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", source_material_path],
+            capture_output=True, text=True,
+        )
+        clip_duration_ms = int(float(probe.stdout.strip()) * 1000)
+        logger.info("Clip duration: %.1fs", clip_duration_ms / 1000)
+
+        # Use a frame at 5s as reference (avoid fade-in at 0s)
+        ref_frame_ms = min(5000, clip_duration_ms // 4)
+        ref_hash = _compute_dhash(_extract_frame_ref(source_material_path, ref_frame_ms, work_dir, "ref"))
+        if ref_hash is None:
+            raise RuntimeError("Failed to compute reference frame hash")
 
         results: list[dict[str, Any]] = []
         clip_files: list[dict[str, Any]] = []
-        episodes_dir = os.path.join(work_dir, "episodes")
-        os.makedirs(episodes_dir, exist_ok=True)
 
         for target in targets:
             target_lang = target["language"]
@@ -746,35 +756,33 @@ def replicate(
             logger.info("Processing %s (%s)...", target_lang, target_id)
 
             try:
-                episode = client.get_episode(target_id, 1)
-                voucher_url = _pick_best_voucher(episode["episodeVoucherVos"])
-                target_video_path = os.path.join(episodes_dir, f"{target_lang}_{target_id}_ep1.mp4")
-                client.download_file(voucher_url, target_video_path)
-
-                fine_start_ms, fine_end_ms = match_frame_positions(
-                    source_material_path, target_video_path,
-                    source_start_ms, source_end_ms, work_dir=work_dir,
+                # Search target episodes for the reference frame
+                start_ms, end_ms, ep_start, ep_end = _find_clip_in_target(
+                    client, target_id, work_dir, ref_hash, clip_duration_ms, ref_frame_ms,
                 )
 
-                if fine_start_ms is None:
-                    logger.warning("%s: frame match failed, using source timestamps", target_lang)
-                    fine_start_ms = source_start_ms
-                    fine_end_ms = source_end_ms
+                # Download needed episodes, concat, and cut
+                ep_paths = _download_target_episodes(
+                    client, target_id, ep_start, ep_end, work_dir,
+                )
+                concat_path = os.path.join(work_dir, f"target_{target_lang}.mp4")
+                _concat_videos(ep_paths, concat_path)
 
                 seq = _next_monthly_seq()
                 filename = _build_replicate_filename(
                     seq, author, target_lang, target_remark,
-                    1, 1, fine_start_ms, fine_end_ms,
+                    ep_start, ep_end, start_ms, end_ms,
                 )
                 output_path = os.path.join(work_dir, filename)
                 cut_and_assemble(
-                    editor, target_video_path,
-                    fine_start_ms, fine_end_ms,
+                    editor, concat_path,
+                    start_ms, end_ms,
                     endings_dir, target_lang,
                     output_path, work_dir,
                 )
 
                 clip_files.append({"path": output_path, "lang": target_lang})
+                logger.info("%s done: %s", target_lang, filename)
 
             except Exception as e:
                 logger.error("Failed for %s: %s", target_lang, e)
@@ -786,7 +794,7 @@ def replicate(
                 client, folder_id, replicate_folder_name,
                 clip_files, target_languages,
                 targets[0]["language"] if targets else source_lang,
-                targets[0]["shortPlayId"] if targets else source_short_play_id,
+                targets[0]["shortPlayId"] if targets else material["videoId"],
             )
             results.extend(upload_results)
 
@@ -798,3 +806,91 @@ def replicate(
 
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def _find_clip_in_target(
+    client: NetshortClient,
+    target_id: str,
+    work_dir: str,
+    ref_hash: imagehash.ImageHash,
+    clip_duration_ms: int,
+    ref_offset_ms: int = 5000,
+) -> tuple[int, int, int, int]:
+    """Find clip position in target drama episodes. Returns (start_ms, end_ms, ep_start, ep_end).
+
+    Timestamps are relative to the concatenated video of episodes ep_start..ep_end.
+    """
+    cumulative = 0
+    cum_before: dict[int, int] = {}  # cumulative duration before each episode starts
+    found_start: int | None = None
+    ep_start: int = 0
+
+    for ep in range(1, 30):
+        try:
+            ep_data = client.get_episode(target_id, ep)
+        except RuntimeError:
+            break
+
+        voucher_url = _pick_best_voucher(ep_data["episodeVoucherVos"])
+        ep_path = os.path.join(work_dir, f"tgt_ep_{ep}.mp4")
+        client.download_file(voucher_url, ep_path)
+
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", ep_path],
+            capture_output=True, text=True,
+        )
+        ep_dur_ms = int(float(probe.stdout.strip()) * 1000)
+        cum_before[ep] = cumulative
+
+        if found_start is None:
+            match = _find_best_frame_match(ep_path, ref_hash, 0, ep_dur_ms, 3000, work_dir)
+            if match is not None and match[1] > 0.85:
+                found_start = cumulative + match[0] - ref_offset_ms
+                ep_start = ep
+                logger.info("Found start in ep %d at global %dms (sim=%.3f)", ep, found_start, match[1])
+
+        cumulative += ep_dur_ms
+
+        if found_start is not None and cumulative >= found_start + clip_duration_ms:
+            end_global = found_start + clip_duration_ms
+            ep_end = ep
+            offset_before_start = cum_before[ep_start]
+            local_start = found_start - offset_before_start
+            local_end = end_global - offset_before_start
+            logger.info("Clip: global %d-%dms, local %d-%dms, episodes %d-%d",
+                        found_start, end_global, local_start, local_end, ep_start, ep_end)
+            return local_start, local_end, ep_start, ep_end
+
+    raise RuntimeError("Could not locate clip in target drama episodes")
+
+
+def _download_target_episodes(
+    client: NetshortClient, target_id: str, ep_start: int, ep_end: int, work_dir: str
+) -> list[str]:
+    """Download target episodes ep_start..ep_end, return paths."""
+    paths = []
+    for ep in range(ep_start, ep_end + 1):
+        ep_path = os.path.join(work_dir, f"tgt_ep_{ep}.mp4")
+        if not os.path.exists(ep_path):
+            ep_data = client.get_episode(target_id, ep)
+            voucher_url = _pick_best_voucher(ep_data["episodeVoucherVos"])
+            client.download_file(voucher_url, ep_path)
+        paths.append(ep_path)
+    return paths
+
+
+def _concat_videos(paths: list[str], output: str) -> None:
+    """Concatenate video files with codec copy."""
+    if len(paths) == 1:
+        import shutil as _shutil
+        _shutil.copy2(paths[0], output)
+        return
+    concat_list = output + ".txt"
+    with open(concat_list, "w", encoding="utf-8") as f:
+        for p in paths:
+            f.write(f"file '{p.replace(chr(92), chr(47))}'\n")
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list, "-c", "copy", output],
+        capture_output=True, text=True,
+    )
+    os.remove(concat_list)
