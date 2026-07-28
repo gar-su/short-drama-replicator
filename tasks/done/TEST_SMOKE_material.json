@@ -1,0 +1,18 @@
+{
+  "material_name": "TEST_SMOKE_material",
+  "created_at": "2026-07-28T18:47:57+08:00",
+  "status": "done",
+  "source_lang": "en_US",
+  "target_langs": [
+    "es_ES",
+    "ar_AE"
+  ],
+  "results": [
+    {
+      "lang": "es_ES",
+      "file": "test.mp4",
+      "status": "ok"
+    }
+  ],
+  "finished_at": "2026-07-28T12:00:00+08:00"
+}
