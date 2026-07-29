@@ -117,7 +117,10 @@ def search_dubbed_dramas(
             break
 
     source_prefix = source_language[:2].lower()
-    result = [c for c in candidates if c["language"][:2].lower() != source_prefix]
+    result = [
+        c for c in candidates
+        if c["language"][:2].lower() != source_prefix and c["remark"].upper().startswith("P")
+    ]
     logger.info("Found %d target languages (filtered from %d total)", len(result), len(candidates))
     return result
 
