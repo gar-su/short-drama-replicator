@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Short Drama Replicator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
+.container { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
+h1 { font-size: 22px; margin-bottom: 4px; }
+.subtitle { color: #888; font-size: 13px; margin-bottom: 24px; }
+.card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.card h2 { font-size: 15px; margin-bottom: 14px; color: #444; }
+input, button { padding: 9px 14px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; outline: none; }
+input:focus { border-color: #4a90d9; }
+input { width: 340px; margin-right: 10px; }
+button { background: #4a90d9; color: #fff; border: none; cursor: pointer; font-weight: 500; }
+button:hover { background: #3a7bc8; }
+button:disabled { background: #bbb; cursor: not-allowed; }
+.kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.column { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-height: 120px; }
+.column h3 { font-size: 13px; padding-bottom: 10px; border-bottom: 2px solid #e8e8e8; margin-bottom: 10px; color: #666; }
+.column h3 .count { font-weight: normal; color: #999; font-size: 12px; }
+.task-item { font-size: 13px; padding: 8px 10px; margin-bottom: 6px; background: #f7f8fa; border-radius: 6px; word-break: break-all; line-height: 1.5; }
+.task-item .time { font-size: 11px; color: #aaa; margin-top: 2px; }
+.task-item .error { color: #e74c3c; font-size: 12px; margin-top: 2px; }
+.task-item .langs { color: #27ae60; font-size: 12px; margin-top: 2px; }
+.error-msg { color: #e74c3c; font-size: 13px; margin-top: 10px; }
+.success-msg { color: #27ae60; font-size: 13px; margin-top: 10px; }
+.login-screen { max-width: 420px; margin: 100px auto; }
+.login-screen h1 { text-align: center; margin-bottom: 6px; }
+.login-screen .subtitle { text-align: center; margin-bottom: 28px; }
+.login-screen input { width: 100%; margin-bottom: 14px; margin-right: 0; }
+.login-screen button { width: 100%; padding: 12px; font-size: 15px; }
+.logout-link { float: right; font-size: 12px; color: #999; cursor: pointer; margin-top: 4px; }
+.logout-link:hover { color: #e74c3c; }
+.empty-state { color: #bbb; font-size: 13px; text-align: center; padding: 20px 0; }
+.loading { text-align: center; color: #aaa; font-size: 13px; padding: 20px 0; }
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+  <!-- Login -->
+  <div id="login-screen" class="card login-screen">
+    <h1>Short Drama Replicator</h1>
+    <p class="subtitle">素材复刻任务管理</p>
+    <input type="password" id="password-input" placeholder="登录密码" onkeydown="if(event.key==='Enter')login()">
+    <input type="text" id="token-input" placeholder="GitHub Token（记住后自动预填）">
+    <button onclick="login()">登 录</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+
+  <!-- Main -->
+  <div id="main-screen" style="display:none">
+    <h1>Short Drama Replicator <span class="logout-link" onclick="logout()">退出</span></h1>
+    <p class="subtitle">素材复刻任务管理 &mdash; 提交任务后等待 Worker 处理</p>
+
+    <div class="card">
+      <h2>新建复刻任务</h2>
+      <input type="text" id="material-input" placeholder="输入素材名称" onkeydown="if(event.key==='Enter')submitTask()">
+      <button id="submit-btn" onclick="submitTask()">提交</button>
+      <div class="error-msg" id="submit-error"></div>
+      <div class="success-msg" id="submit-success"></div>
+    </div>
+
+    <div class="kanban">
+      <div class="column"><h3>待处理 <span class="count" id="pending-count"></span></h3><div id="pending-list"></div></div>
+      <div class="column"><h3>处理中 <span class="count" id="running-count"></span></h3><div id="running-list"></div></div>
+      <div class="column"><h3>已完成 <span class="count" id="done-count"></span></h3><div id="done-list"></div></div>
+      <div class="column"><h3>失败 <span class="count" id="failed-count"></span></h3><div id="failed-list"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var APP_PASSWORD = 'admin';
+var GH_REPO = 'gar-su/short-drama-replicator';
+var GH_API = 'https://api.github.com/repos';
+
+function loadFromStorage() {
+  var token = localStorage.getItem('sd_gh_token') || '';
+  if (token) document.getElementById('token-input').value = token;
+}
+
+function login() {
+  var pw = document.getElementById('password-input').value.trim();
+  var token = document.getElementById('token-input').value.trim();
+  var errEl = document.getElementById('login-error');
+
+  if (!pw) {
+    errEl.textContent = '请输入密码';
+    return;
+  }
+
+  if (pw !== APP_PASSWORD) {
+    errEl.textContent = '密码错误';
+    return;
+  }
+
+  if (!token) {
+    errEl.textContent = '请输入 GitHub Token';
+    return;
+  }
+
+  localStorage.setItem('sd_gh_token', token);
+  errEl.textContent = '';
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'block';
+  refreshKanban();
+  setInterval(refreshKanban, 30000);
+}
+
+function logout() {
+  document.getElementById('login-screen').style.display = 'block';
+  document.getElementById('main-screen').style.display = 'none';
+  document.getElementById('password-input').value = '';
+}
+
+function apiHeaders() {
+  return { Authorization: 'token ' + (localStorage.getItem('sd_gh_token') || ''), Accept: 'application/vnd.github.v3+json' };
+}
+
+async function submitTask() {
+  var name = document.getElementById('material-input').value.trim();
+  var errEl = document.getElementById('submit-error');
+  var okEl = document.getElementById('submit-success');
+  var btn = document.getElementById('submit-btn');
+
+  if (!name) { errEl.textContent = '请输入素材名称'; return; }
+
+  btn.disabled = true;
+  errEl.textContent = '';
+  okEl.textContent = '';
+
+  var now = new Date();
+  var ts = now.getFullYear() + '-' +
+    String(now.getMonth()+1).padStart(2,'0') + '-' +
+    String(now.getDate()).padStart(2,'0') + 'T' +
+    String(now.getHours()).padStart(2,'0') + ':' +
+    String(now.getMinutes()).padStart(2,'0') + ':' +
+    String(now.getSeconds()).padStart(2,'0') + '+08:00';
+
+  var task = { material_name: name, created_at: ts, status: 'pending' };
+  var json = JSON.stringify(task, null, 2);
+  var content = btoa(unescape(encodeURIComponent(json)));
+
+  try {
+    var checkResp = await fetch(
+      GH_API + '/' + GH_REPO + '/contents/tasks/pending/' + encodeURIComponent(name) + '.json',
+      { headers: apiHeaders() }
+    );
+    var sha = null;
+    if (checkResp.ok) {
+      var d = await checkResp.json();
+      sha = d.sha;
+    }
+
+    var body = { message: 'new task: ' + name, content: content };
+    if (sha) body.sha = sha;
+
+    var resp = await fetch(
+      GH_API + '/' + GH_REPO + '/contents/tasks/pending/' + encodeURIComponent(name) + '.json',
+      { method: 'PUT', headers: Object.assign({}, apiHeaders(), { 'Content-Type': 'application/json' }), body: JSON.stringify(body) }
+    );
+
+    if (!resp.ok) {
+      var ed = await resp.json();
+      throw new Error(ed.message || 'HTTP ' + resp.status);
+    }
+
+    okEl.textContent = '任务已提交！';
+    document.getElementById('material-input').value = '';
+    setTimeout(function() { okEl.textContent = ''; }, 3000);
+    refreshKanban();
+  } catch(e) {
+    errEl.textContent = '提交失败: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function listTasks(status) {
+  try {
+    var resp = await fetch(GH_API + '/' + GH_REPO + '/contents/tasks/' + status, { headers: apiHeaders() });
+    if (resp.status === 404) return [];
+    if (!resp.ok) return [];
+    var data = await resp.json();
+    if (!Array.isArray(data)) data = [];
+    return data
+      .filter(function(f) { return f.name.endsWith('.json'); })
+      .map(function(f) {
+        try {
+          var content = JSON.parse(decodeURIComponent(escape(atob(f.content))));
+          content._sha = f.sha;
+          content._path = f.path;
+          return content;
+        } catch(e) { return null; }
+      })
+      .filter(Boolean);
+  } catch(e) { return []; }
+}
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function renderTaskItem(task, status) {
+  var html = '<div class="task-item"><strong>' + escapeHtml(task.material_name) + '</strong>';
+  if (task.created_at) html += '<div class="time">' + escapeHtml(task.created_at) + '</div>';
+  if (status === 'done' && task.results) {
+    var langs = task.results.filter(function(r) { return r.status === 'ok'; }).map(function(r) { return r.lang; });
+    if (langs.length) html += '<div class="langs">已复刻: ' + escapeHtml(langs.join(', ')) + '</div>';
+    var failed = task.results.filter(function(r) { return r.status === 'failed'; });
+    if (failed.length) html += '<div class="error">失败: ' + escapeHtml(failed.map(function(r) { return r.lang; }).join(', ')) + '</div>';
+  }
+  if (status === 'failed' && task.error) {
+    html += '<div class="error">' + escapeHtml(task.error.substring(0, 120)) + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+async function refreshKanban() {
+  var statuses = ['pending', 'running', 'done', 'failed'];
+  for (var i = 0; i < statuses.length; i++) {
+    var s = statuses[i];
+    var tasks = await listTasks(s);
+    var el = document.getElementById(s + '-list');
+    var countEl = document.getElementById(s + '-count');
+    if (countEl) countEl.textContent = tasks.length ? '(' + tasks.length + ')' : '';
+    if (tasks.length === 0) {
+      el.innerHTML = '<div class="empty-state">暂无</div>';
+    } else {
+      el.innerHTML = tasks.map(function(t) { return renderTaskItem(t, s); }).join('');
+    }
+  }
+}
+
+loadFromStorage();
+
+</script>
+
+</body>
+</html>
