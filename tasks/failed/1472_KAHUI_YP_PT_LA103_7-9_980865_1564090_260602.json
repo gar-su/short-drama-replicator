@@ -4,6 +4,6 @@
   "status": "failed",
   "started_at": "2026-08-03T14:45:37+08:00",
   "worker_id": "DESKTOP-1M713GQ:17404",
-  "finished_at": "2026-08-03T14:45:40+08:00",
-  "error": "_ssl.c:993: The handshake operation timed out"
+  "finished_at": "2026-08-04T15:57:00+08:00",
+  "error": "cancelled by user during Stage 3 (slowness analysis; 16/32 done in ~88min)"
 }
