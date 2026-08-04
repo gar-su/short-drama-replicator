@@ -1,1 +1,6 @@
-{"material_name": "__move_test__", "status": "failed", "error": "old"}
+{
+  "material_name": "__move_test__",
+  "status": "failed",
+  "started_at": "x",
+  "error": "new failure"
+}
