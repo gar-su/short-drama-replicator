@@ -37,6 +37,7 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 .logout-link:hover { color: #e74c3c; }
 .empty-state { color: #bbb; font-size: 13px; text-align: center; padding: 20px 0; }
 .loading { text-align: center; color: #aaa; font-size: 13px; padding: 20px 0; }
+.load-error { color: #e74c3c; font-size: 13px; text-align: center; padding: 20px 0; }
 </style>
 </head>
 <body>
@@ -79,12 +80,31 @@ var APP_PASSWORD = 'admin';
 var GH_REPO = 'gar-su/short-drama-replicator';
 var GH_API = 'https://api.github.com/repos';
 
+var pollTimer = null;
+
 function loadFromStorage() {
   var token = localStorage.getItem('sd_gh_token') || '';
   if (token) document.getElementById('token-input').value = token;
 }
 
-function login() {
+function showMain() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'block';
+  refreshKanban();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(refreshKanban, 30000);
+}
+
+function init() {
+  loadFromStorage();
+  if (localStorage.getItem('sd_gh_token')) {
+    showMain();
+  } else {
+    document.getElementById('login-screen').style.display = 'block';
+  }
+}
+
+async function login() {
   var pw = document.getElementById('password-input').value.trim();
   var token = document.getElementById('token-input').value.trim();
   var errEl = document.getElementById('login-error');
@@ -104,22 +124,50 @@ function login() {
     return;
   }
 
+  try {
+    var verify = await fetch(GH_API + '/' + GH_REPO, {
+      headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!verify.ok) {
+      errEl.textContent = 'GitHub Token 无效或无权访问仓库（HTTP ' + verify.status + '）';
+      return;
+    }
+  } catch(e) {
+    errEl.textContent = '网络错误，无法验证 Token: ' + e.message;
+    return;
+  }
+
   localStorage.setItem('sd_gh_token', token);
   errEl.textContent = '';
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('main-screen').style.display = 'block';
-  refreshKanban();
-  setInterval(refreshKanban, 30000);
+  showMain();
 }
 
 function logout() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  localStorage.removeItem('sd_gh_token');
   document.getElementById('login-screen').style.display = 'block';
   document.getElementById('main-screen').style.display = 'none';
   document.getElementById('password-input').value = '';
+  document.getElementById('token-input').value = '';
+  document.getElementById('login-error').textContent = '';
 }
 
 function apiHeaders() {
   return { Authorization: 'token ' + (localStorage.getItem('sd_gh_token') || ''), Accept: 'application/vnd.github.v3+json' };
+}
+
+async function deleteTaskFileIfExists(status, name) {
+  var url = GH_API + '/' + GH_REPO + '/contents/tasks/' + status + '/' + encodeURIComponent(name) + '.json';
+  var getResp = await fetch(url, { headers: apiHeaders() });
+  if (getResp.status === 404 || !getResp.ok) return;
+  var d = await getResp.json();
+  try {
+    await fetch(url, {
+      method: 'DELETE',
+      headers: Object.assign({}, apiHeaders(), { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ message: 're-submit ' + name + ': remove stale ' + status, sha: d.sha })
+    });
+  } catch(e) {}
 }
 
 async function submitTask() {
@@ -160,6 +208,10 @@ async function submitTask() {
     var body = { message: 'new task: ' + name, content: content };
     if (sha) body.sha = sha;
 
+    // 同一素材重新生产：清掉旧的 done/failed 卡片，让看板只保留本次任务的生命周期
+    await deleteTaskFileIfExists('done', name);
+    await deleteTaskFileIfExists('failed', name);
+
     var resp = await fetch(
       GH_API + '/' + GH_REPO + '/contents/tasks/pending/' + encodeURIComponent(name) + '.json',
       { method: 'PUT', headers: Object.assign({}, apiHeaders(), { 'Content-Type': 'application/json' }), body: JSON.stringify(body) }
@@ -182,24 +234,24 @@ async function submitTask() {
 }
 
 async function listTasks(status) {
-  try {
-    var resp = await fetch(GH_API + '/' + GH_REPO + '/contents/tasks/' + status, { headers: apiHeaders() });
-    if (resp.status === 404) return [];
-    if (!resp.ok) return [];
-    var data = await resp.json();
-    if (!Array.isArray(data)) data = [];
-    return data
-      .filter(function(f) { return f.name.endsWith('.json'); })
-      .map(function(f) {
-        try {
-          var content = JSON.parse(decodeURIComponent(escape(atob(f.content))));
-          content._sha = f.sha;
-          content._path = f.path;
-          return content;
-        } catch(e) { return null; }
-      })
-      .filter(Boolean);
-  } catch(e) { return []; }
+  var resp = await fetch(GH_API + '/' + GH_REPO + '/contents/tasks/' + status, { headers: apiHeaders() });
+  if (resp.status === 404) return [];
+  if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + status);
+  var data = await resp.json();
+  if (!Array.isArray(data)) return [];
+  var files = data.filter(function(f) { return f.type === 'file' && f.name.endsWith('.json'); });
+  var tasks = await Promise.all(files.map(async function(f) {
+    try {
+      var fr = await fetch(f.url, { headers: apiHeaders() });
+      if (!fr.ok) return null;
+      var fd = await fr.json();
+      var content = JSON.parse(decodeURIComponent(escape(atob(fd.content))));
+      content._sha = fd.sha;
+      content._path = fd.path;
+      return content;
+    } catch(e) { return null; }
+  }));
+  return tasks.filter(Boolean);
 }
 
 function escapeHtml(text) {
@@ -228,9 +280,16 @@ async function refreshKanban() {
   var statuses = ['pending', 'running', 'done', 'failed'];
   for (var i = 0; i < statuses.length; i++) {
     var s = statuses[i];
-    var tasks = await listTasks(s);
     var el = document.getElementById(s + '-list');
     var countEl = document.getElementById(s + '-count');
+    var tasks;
+    try {
+      tasks = await listTasks(s);
+    } catch(e) {
+      if (countEl) countEl.textContent = '';
+      el.innerHTML = '<div class="load-error">加载失败（检查 Token / 网络）</div>';
+      continue;
+    }
     if (countEl) countEl.textContent = tasks.length ? '(' + tasks.length + ')' : '';
     if (tasks.length === 0) {
       el.innerHTML = '<div class="empty-state">暂无</div>';
@@ -240,7 +299,7 @@ async function refreshKanban() {
   }
 }
 
-loadFromStorage();
+init();
 
 </script>
 
