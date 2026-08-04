@@ -47,6 +47,11 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 .help details details { margin: 4px 0 2px; padding: 6px 10px; background: #fafbfc; border-radius: 6px; }
 .help details details summary { color: #444; font-weight: 600; }
 .login-hint { text-align: center; font-size: 12px; color: #999; margin-top: 12px; }
+.dub-filter-row { margin-bottom: 12px; font-size: 13px; color: #555; }
+.dub-filter-row label { margin-right: 16px; cursor: pointer; }
+.dub-filter-row input { width: auto; margin-right: 4px; vertical-align: -2px; }
+.dub-filter-label { margin-right: 8px; font-weight: 500; }
+.dub-badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #eef4fb; color: #4a90d9; margin-left: 6px; vertical-align: 1px; }
 </style>
 </head>
 <body>
@@ -75,14 +80,14 @@ button:disabled { background: #bbb; cursor: not-allowed; }
         <h3>使用步骤</h3>
         <ol>
           <li><b>登录</b>：密码 <code>admin</code>（轻量门槛），GitHub Token 需对任务仓库 <code>gar-su/short-drama-replicator</code> 有读写权限。Token 只保存在浏览器本地，刷新页面自动预填。</li>
-          <li><b>提交任务</b>：在「新建复刻任务」输入<b>素材名称</b>（平台后台该素材的名称，例如 <code>1472_KAHUI_YP_PT_LA103_7-9_980865_1564090_260602</code>），回车或点「提交」。</li>
+          <li><b>提交任务</b>：先选<b>配音类型</b>（AI配音 / 人工配音 / 都要），再输入<b>素材名称</b>（平台后台该素材的名称，例如 <code>1472_KAHUI_YP_PT_LA103_7-9_980865_1564090_260602</code>），回车或点「提交」。</li>
           <li><b>等待处理</b>：worker 每 5 分钟轮询一次任务仓库，看板卡片会经历 待处理 → 处理中 → 已完成 / 失败。</li>
           <li><b>查看结果</b>：完成后成片自动上传到平台，位于该素材的 <code>{素材名}_复刻</code> 文件夹，每个语种一个成片。</li>
         </ol>
 
         <h3>产出说明</h3>
         <ul>
-          <li>只处理该剧的 <b>AI 配音版</b> 语种（库名/别名含 "AI"）；素材本身是配音版或该剧没有 AI 配音版时，任务会失败并在卡片上提示。</li>
+          <li>产出范围由提交时的<b>配音类型</b>决定：<b>AI配音</b> 只产 AI 配音版、<b>人工配音</b> 只产人工配音版、<b>都要</b> 两者都产。素材本身是配音版（非原版）或该剧没有所选类型的版本时，任务会失败并在卡片上提示。</li>
           <li>每个成片 1080×1920 竖屏，顶部为目标语种剧名、底部为该剧剧情总结，主体加固定片尾。</li>
           <li>文件名格式：<code>{序号}_KAHUI_YP_{语种}_{剧码}_{集数}_{起止毫秒}_{日期}_AI复刻.mp4</code></li>
         </ul>
@@ -101,6 +106,10 @@ button:disabled { background: #bbb; cursor: not-allowed; }
           <div>worker 会自动回收超过 8 小时仍未完成的「处理中」任务，重排回「待处理」重新执行；正常较慢的任务不会被误伤。</div>
         </details>
         <details>
+          <summary>「配音类型」三个选项有什么区别？</summary>
+          <div><b>AI配音</b>：只产出 AI 配音版语种（库名带 "AI"）；<b>人工配音</b>：只产出人工配音版语种；<b>都要</b>：两类都产出（同一语种可能同时有两类，成片数量会翻倍）。提交后卡片上会标注本次的配音类型。若该剧没有所选类型的版本，任务会失败。</div>
+        </details>
+        <details>
           <summary>为什么有些语种的成片是 608×1080 且没有片尾？</summary>
           <div>该语种片源本身就是这个分辨率和无片尾，属正常现象，不影响播放。</div>
         </details>
@@ -117,6 +126,12 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 
     <div class="card">
       <h2>新建复刻任务</h2>
+      <div class="dub-filter-row">
+        <span class="dub-filter-label">配音类型：</span>
+        <label><input type="radio" name="dub-filter" value="ai" checked> AI配音</label>
+        <label><input type="radio" name="dub-filter" value="human"> 人工配音</label>
+        <label><input type="radio" name="dub-filter" value="both"> 都要</label>
+      </div>
       <input type="text" id="material-input" placeholder="输入素材名称" onkeydown="if(event.key==='Enter')submitTask()">
       <button id="submit-btn" onclick="submitTask()">提交</button>
       <div class="error-msg" id="submit-error"></div>
@@ -247,7 +262,9 @@ async function submitTask() {
     String(now.getMinutes()).padStart(2,'0') + ':' +
     String(now.getSeconds()).padStart(2,'0') + '+08:00';
 
-  var task = { material_name: name, created_at: ts, status: 'pending' };
+  var dubFilterEl = document.querySelector('input[name="dub-filter"]:checked');
+  var dub_filter = dubFilterEl ? dubFilterEl.value : 'ai';
+  var task = { material_name: name, dub_filter: dub_filter, created_at: ts, status: 'pending' };
   var json = JSON.stringify(task, null, 2);
   var content = btoa(unescape(encodeURIComponent(json)));
 
@@ -318,7 +335,10 @@ function escapeHtml(text) {
 }
 
 function renderTaskItem(task, status) {
+  var dubLabels = { ai: 'AI配音', human: '人工配音', both: '全部' };
+  var dubLabel = dubLabels[task.dub_filter] || '';
   var html = '<div class="task-item"><strong>' + escapeHtml(task.material_name) + '</strong>';
+  if (dubLabel) html += '<span class="dub-badge">' + dubLabel + '</span>';
   if (task.created_at) html += '<div class="time">' + escapeHtml(task.created_at) + '</div>';
   if (status === 'done' && task.results) {
     var langs = task.results.filter(function(r) { return r.status === 'ok'; }).map(function(r) { return r.lang; });
