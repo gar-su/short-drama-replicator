@@ -38,6 +38,15 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 .empty-state { color: #bbb; font-size: 13px; text-align: center; padding: 20px 0; }
 .loading { text-align: center; color: #aaa; font-size: 13px; padding: 20px 0; }
 .load-error { color: #e74c3c; font-size: 13px; text-align: center; padding: 20px 0; }
+.help { font-size: 13px; line-height: 1.7; color: #555; }
+.help summary { cursor: pointer; font-weight: 600; color: #4a90d9; user-select: none; }
+.help h3 { font-size: 13px; margin: 12px 0 4px; color: #444; }
+.help ol, .help ul { margin: 4px 0 0 18px; }
+.help li { margin-bottom: 5px; }
+.help code { background: #f0f2f5; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: #c0392b; }
+.help details details { margin: 4px 0 2px; padding: 6px 10px; background: #fafbfc; border-radius: 6px; }
+.help details details summary { color: #444; font-weight: 600; }
+.login-hint { text-align: center; font-size: 12px; color: #999; margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -51,12 +60,60 @@ button:disabled { background: #bbb; cursor: not-allowed; }
     <input type="text" id="token-input" placeholder="GitHub Token（记住后自动预填）">
     <button onclick="login()">登 录</button>
     <div class="error-msg" id="login-error"></div>
+    <div class="login-hint">登录后可在页面上方查看「使用说明与常见问题」</div>
   </div>
 
   <!-- Main -->
   <div id="main-screen" style="display:none">
     <h1>Short Drama Replicator <span class="logout-link" onclick="logout()">退出</span></h1>
     <p class="subtitle">素材复刻任务管理 &mdash; 提交任务后等待 Worker 处理</p>
+
+    <div class="card help">
+      <details open>
+        <summary>使用说明与常见问题</summary>
+
+        <h3>使用步骤</h3>
+        <ol>
+          <li><b>登录</b>：密码 <code>admin</code>（轻量门槛），GitHub Token 需对任务仓库 <code>gar-su/short-drama-replicator</code> 有读写权限。Token 只保存在浏览器本地，刷新页面自动预填。</li>
+          <li><b>提交任务</b>：在「新建复刻任务」输入<b>素材名称</b>（平台后台该素材的名称，例如 <code>1472_KAHUI_YP_PT_LA103_7-9_980865_1564090_260602</code>），回车或点「提交」。</li>
+          <li><b>等待处理</b>：worker 每 5 分钟轮询一次任务仓库，看板卡片会经历 待处理 → 处理中 → 已完成 / 失败。</li>
+          <li><b>查看结果</b>：完成后成片自动上传到平台，位于该素材的 <code>{素材名}_复刻</code> 文件夹，每个语种一个成片。</li>
+        </ol>
+
+        <h3>产出说明</h3>
+        <ul>
+          <li>只处理该剧的 <b>AI 配音版</b> 语种（库名/别名含 "AI"）；素材本身是配音版或该剧没有 AI 配音版时，任务会失败并在卡片上提示。</li>
+          <li>每个成片 1080×1920 竖屏，顶部为目标语种剧名、底部为该剧剧情总结，主体加固定片尾。</li>
+          <li>文件名格式：<code>{序号}_KAHUI_YP_{语种}_{剧码}_{集数}_{起止毫秒}_{日期}_AI复刻.mp4</code></li>
+        </ul>
+
+        <h3>常见问题</h3>
+        <details>
+          <summary>提交后要等多久？</summary>
+          <div>取决于该剧有多少 AI 配音语种：语种多（如 16 个）通常 20–40 分钟，首次还会加上素材下载与转写时间。看板实时刷新，卡片停留在「处理中」即代表正常。</div>
+        </details>
+        <details>
+          <summary>同一个素材能重复生产吗？</summary>
+          <div>可以。重新提交会先清掉旧的 成功/失败 卡片，以本次生产为准，避免同名冲突。</div>
+        </details>
+        <details>
+          <summary>任务卡在「处理中」很久不动怎么办？</summary>
+          <div>worker 会自动回收超过 8 小时仍未完成的「处理中」任务，重排回「待处理」重新执行；正常较慢的任务不会被误伤。</div>
+        </details>
+        <details>
+          <summary>为什么有些语种的成片是 608×1080 且没有片尾？</summary>
+          <div>该语种片源本身就是这个分辨率和无片尾，属正常现象，不影响播放。</div>
+        </details>
+        <details>
+          <summary>任务失败怎么办？</summary>
+          <div>「失败」列会显示错误摘要。常见原因：素材名称有误、该剧无 AI 配音版、磁盘空间不足、网络超时。确认后可重新提交。</div>
+        </details>
+        <details>
+          <summary>GitHub Token 安全吗？</summary>
+          <div>Token 只保存在你自己的浏览器 localStorage，不会上传到任何服务器或写入代码仓库，请勿外发给他人。</div>
+        </details>
+      </details>
+    </div>
 
     <div class="card">
       <h2>新建复刻任务</h2>
