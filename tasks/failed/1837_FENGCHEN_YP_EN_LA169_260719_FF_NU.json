@@ -6,5 +6,5 @@
   "started_at": "2026-08-05T17:37:07+08:00",
   "worker_id": "DESKTOP-1M713GQ:17536",
   "finished_at": "2026-08-05T17:37:10+08:00",
-  "error": "No clip replicated successfully; 16 language(s) failed"
+  "error": "No clip replicated successfully; 16 language(s) failed; errors: 'Episode 1 not found' x16 — AI配音目标剧(remark=PA562)在平台0集(app_list total=0)，无可下载内容；同剧 LA169 多语言版本有50集但被 remark 以 P 开头的过滤排除"
 }
