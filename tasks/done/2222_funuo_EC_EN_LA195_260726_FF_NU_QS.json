@@ -1,112 +1,109 @@
 {
   "material_name": "2222_funuo_EC_EN_LA195_260726_FF_NU_QS",
-  "dub_filter": "ai",
-  "created_at": "2026-08-05T11:21:12+08:00",
+  "created_at": "2026-08-06T15:33:25+08:00",
   "status": "done",
-  "started_at": "2026-08-05T11:21:51+08:00",
-  "worker_id": "DESKTOP-1M713GQ:1356",
+  "started_at": "2026-08-06T15:38:21+08:00",
+  "worker_id": "DESKTOP-1M713GQ:11488",
   "source_lang": "en_US",
   "target_langs": [
-    "fr_FR",
-    "de_DE",
-    "ar_AE",
-    "vi_VN",
     "id_ID",
     "es_ES",
+    "de_DE",
+    "ar_AE",
     "pt_PT",
-    "tr_TR",
-    "ms_MY",
     "it_IT",
     "hi_IN",
-    "zh_CN",
-    "th_TH",
-    "ja_JP",
     "ko_KR",
+    "fr_FR",
+    "vi_VN",
+    "th_TH",
+    "ms_MY",
+    "tr_TR",
+    "zh_CN",
+    "ja_JP",
     "zh_TW"
   ],
   "results": [
     {
       "lang": "id_ID",
-      "file": null,
-      "status": "failed",
-      "error": "[WinError 2] 系统找不到指定的文件。: 'E:\\\\short-drama-replicator\\\\storage\\\\2222_funuo_EC_EN_LA195_260726_FF_NU_QS_20260805_112200\\\\scratch\\\\id_ID\\\\cut_bb6bd500.mp4'"
-    },
-    {
-      "lang": "pt_PT",
-      "file": null,
-      "status": "failed",
-      "error": "[WinError 2] 系统找不到指定的文件。: 'E:\\\\short-drama-replicator\\\\storage\\\\2222_funuo_EC_EN_LA195_260726_FF_NU_QS_20260805_112200\\\\scratch\\\\pt_PT\\\\cut_8a27a3c3.mp4'"
-    },
-    {
-      "lang": "vi_VN",
-      "file": "495_KAHUI_YP_VI_PA547_7-9_116760_292726_260805_AI复刻.mp4",
-      "status": "ok"
-    },
-    {
-      "lang": "ar_AE",
-      "file": "494_KAHUI_YP_AR_PA547_7-9_99760_292726_260805_AI复刻.mp4",
-      "status": "ok"
-    },
-    {
-      "lang": "de_DE",
-      "file": "493_KAHUI_YP_DE_PA547_7-9_115760_289726_260805_AI复刻.mp4",
-      "status": "ok"
-    },
-    {
-      "lang": "fr_FR",
-      "file": "492_KAHUI_YP_FR_PA547_7-9_117760_292726_260805_AI复刻.mp4",
-      "status": "ok"
+      "file": "546_KAHUI_YP_ID_PA547_7-8_117560_294526_260806_AI复刻.mp4",
+      "status": "local_only"
     },
     {
       "lang": "es_ES",
-      "file": "497_KAHUI_YP_ES_PA547_7-9_100760_283726_260805_AI复刻.mp4",
-      "status": "ok"
+      "file": "547_KAHUI_YP_ES_PA547_7-8_123360_300326_260806_AI复刻.mp4",
+      "status": "local_only"
     },
     {
-      "lang": "tr_TR",
-      "file": "501_KAHUI_YP_TR_PA547_7-9_113760_277726_260805_AI复刻.mp4",
-      "status": "ok"
+      "lang": "de_DE",
+      "file": "548_KAHUI_YP_DE_PA547_7-8_114460_291426_260806_AI复刻.mp4",
+      "status": "local_only"
     },
     {
-      "lang": "hi_IN",
-      "file": "504_KAHUI_YP_HI_PA547_7-9_97760_276726_260805_AI复刻.mp4",
-      "status": "ok"
+      "lang": "ar_AE",
+      "file": "549_KAHUI_YP_AR_PA547_7-8_121060_298026_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "pt_PT",
+      "file": "550_KAHUI_YP_PT_PA547_7-8_116760_293726_260806_AI复刻.mp4",
+      "status": "local_only"
     },
     {
       "lang": "it_IT",
-      "file": "503_KAHUI_YP_IT_PA547_7-9_117760_275726_260805_AI复刻.mp4",
-      "status": "ok"
+      "file": "551_KAHUI_YP_IT_PA547_7-8_116660_293626_260806_AI复刻.mp4",
+      "status": "local_only"
     },
     {
-      "lang": "zh_CN",
-      "file": "505_KAHUI_YP_ZH_PA547_7-9_99760_290726_260805_AI复刻.mp4",
-      "status": "ok"
-    },
-    {
-      "lang": "ms_MY",
-      "file": "502_KAHUI_YP_MS_PA547_7-9_115760_290726_260805_AI复刻.mp4",
-      "status": "ok"
-    },
-    {
-      "lang": "th_TH",
-      "file": "506_KAHUI_YP_TH_PA547_7-9_116760_291726_260805_AI复刻.mp4",
-      "status": "ok"
-    },
-    {
-      "lang": "ja_JP",
-      "file": "507_KAHUI_YP_JA_PA547_7-9_99760_290726_260805_AI复刻.mp4",
-      "status": "ok"
+      "lang": "hi_IN",
+      "file": "552_KAHUI_YP_HI_PA547_7-8_120760_297726_260806_AI复刻.mp4",
+      "status": "local_only"
     },
     {
       "lang": "ko_KR",
-      "file": "508_KAHUI_YP_KO_PA547_7-9_117760_293726_260805_AI复刻.mp4",
-      "status": "ok"
+      "file": "553_KAHUI_YP_KO_PA547_7-8_118560_295526_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "fr_FR",
+      "file": "554_KAHUI_YP_FR_PA547_7-8_118260_295226_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "vi_VN",
+      "file": "555_KAHUI_YP_VI_PA547_7-8_115860_292826_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "th_TH",
+      "file": "556_KAHUI_YP_TH_PA547_7-8_115860_292826_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "ms_MY",
+      "file": "557_KAHUI_YP_MS_PA547_7-8_114760_291726_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "tr_TR",
+      "file": "558_KAHUI_YP_TR_PA547_7-8_112460_289426_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "zh_CN",
+      "file": "559_KAHUI_YP_ZH_PA547_7-8_121160_298126_260806_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "ja_JP",
+      "file": "560_KAHUI_YP_JA_PA547_7-8_121160_298126_260806_AI复刻.mp4",
+      "status": "local_only"
     },
     {
       "lang": "zh_TW",
-      "file": "509_KAHUI_YP_ZH_PA547_7-9_99760_290726_260805_AI复刻.mp4",
-      "status": "ok"
+      "file": "561_KAHUI_YP_ZH_PA547_7-8_121160_298126_260806_AI复刻.mp4",
+      "status": "local_only"
     }
   ],
-  "finished_at": "2026-08-05T11:21:54+08:00"
+  "finished_at": "2026-08-06T15:38:25+08:00"
 }
