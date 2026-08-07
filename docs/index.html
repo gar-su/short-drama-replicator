@@ -52,6 +52,17 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 .dub-filter-row input { width: auto; margin-right: 4px; vertical-align: -2px; }
 .dub-filter-label { margin-right: 8px; font-weight: 500; }
 .dub-badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #eef4fb; color: #4a90d9; margin-left: 6px; vertical-align: 1px; }
+.lang-grid { margin-bottom: 12px; font-size: 13px; color: #555; }
+.lang-grid label { display: inline-block; margin: 0 14px 6px 0; cursor: pointer; white-space: nowrap; }
+.lang-grid input { width: auto; margin-right: 4px; vertical-align: -2px; }
+.hint-note { font-size: 12px; color: #999; margin: 2px 0 8px; }
+.font-row { margin-bottom: 12px; font-size: 13px; color: #555; }
+.font-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.font-chip { border: 1px solid #d9d9d9; background: #fff; color: #333; border-radius: 6px; padding: 6px 12px; font-size: 15px; cursor: pointer; }
+.font-chip:hover { border-color: #4a90d9; }
+.font-chip.selected { border-color: #4a90d9; background: #eef4fb; color: #4a90d9; box-shadow: 0 0 0 1px #4a90d9; }
+.opt-check { margin: 4px 0 12px; font-size: 13px; color: #555; }
+.opt-check input { width: auto; margin-right: 6px; vertical-align: -2px; }
 </style>
 </head>
 <body>
@@ -132,6 +143,52 @@ button:disabled { background: #bbb; cursor: not-allowed; }
         <label><input type="radio" name="dub-filter" value="human"> 人工配音</label>
         <label><input type="radio" name="dub-filter" value="both"> 都要</label>
       </div>
+      <div class="lang-grid">
+        <span class="dub-filter-label">目标语种：</span>
+        <a href="javascript:void(0)" id="lang-select-all">全选</a>
+        <a href="javascript:void(0)" id="lang-clear" style="margin-left:12px">清空</a>
+        <br>
+        <label><input type="checkbox" data-code="zh_CN"> 简体中文</label>
+        <label><input type="checkbox" data-code="zh_TW"> 繁體中文</label>
+        <label><input type="checkbox" data-code="en"> 英语</label>
+        <label><input type="checkbox" data-code="ja"> 日语</label>
+        <label><input type="checkbox" data-code="ko"> 韩语</label>
+        <label><input type="checkbox" data-code="id"> 印尼语</label>
+        <label><input type="checkbox" data-code="ms"> 马来语</label>
+        <label><input type="checkbox" data-code="th"> 泰语</label>
+        <label><input type="checkbox" data-code="vi"> 越南语</label>
+        <label><input type="checkbox" data-code="es"> 西班牙语</label>
+        <label><input type="checkbox" data-code="fr"> 法语</label>
+        <label><input type="checkbox" data-code="it"> 意大利语</label>
+        <label><input type="checkbox" data-code="de"> 德语</label>
+        <label><input type="checkbox" data-code="pt"> 葡萄牙语</label>
+        <label><input type="checkbox" data-code="ru"> 俄语</label>
+        <label><input type="checkbox" data-code="ar"> 阿拉伯语</label>
+        <label><input type="checkbox" data-code="hi"> 印地语</label>
+        <label><input type="checkbox" data-code="tl"> 菲律宾语</label>
+        <label><input type="checkbox" data-code="bn"> 孟加拉语</label>
+        <label><input type="checkbox" data-code="my"> 缅甸语</label>
+        <div class="hint-note">不选 = 生成全部可用语种；全选后取消勾选即可排除个别语种</div>
+      </div>
+      <div class="font-row">
+        <span class="dub-filter-label">烧录字体：</span>
+        <div class="font-chips" id="font-chips">
+          <button type="button" class="font-chip selected" data-family="">默认</button>
+          <button type="button" class="font-chip" data-family="Microsoft YaHei" style="font-family:'Microsoft YaHei'">微软雅黑</button>
+          <button type="button" class="font-chip" data-family="SimHei" style="font-family:'SimHei'">黑体</button>
+          <button type="button" class="font-chip" data-family="SimSun" style="font-family:'SimSun'">宋体</button>
+          <button type="button" class="font-chip" data-family="Microsoft JhengHei" style="font-family:'Microsoft JhengHei'">正黑体</button>
+          <button type="button" class="font-chip" data-family="DengXian" style="font-family:'DengXian'">等线</button>
+          <button type="button" class="font-chip" data-family="Malgun Gothic" style="font-family:'Malgun Gothic'">맑은 고딕</button>
+          <button type="button" class="font-chip" data-family="Yu Gothic" style="font-family:'Yu Gothic'">游ゴシック</button>
+          <button type="button" class="font-chip" data-family="Arial" style="font-family:'Arial'">Arial</button>
+          <button type="button" class="font-chip" data-family="Times New Roman" style="font-family:'Times New Roman'">Times</button>
+        </div>
+        <div class="hint-note">选中的字体也用于字幕；所选字体若不含某语种文字（如泰语/阿拉伯语/韩语），自动改用该语种默认字体，避免乱码</div>
+      </div>
+      <div class="opt-check">
+        <label><input type="checkbox" id="summary-toggle" checked> 生成 AI 剧情总结（底部）</label>
+      </div>
       <input type="text" id="material-input" placeholder="输入素材名称" onkeydown="if(event.key==='Enter')submitTask()">
       <button id="submit-btn" onclick="submitTask()">提交</button>
       <div class="error-msg" id="submit-error"></div>
@@ -153,6 +210,28 @@ var GH_REPO = 'gar-su/short-drama-replicator';
 var GH_API = 'https://api.github.com/repos';
 
 var pollTimer = null;
+var selectedFont = '';
+
+(function() {
+  var chips = document.getElementById('font-chips');
+  chips.addEventListener('click', function(ev) {
+    var chip = ev.target.closest ? ev.target.closest('.font-chip') : null;
+    if (!chip) return;
+    selectedFont = chip.dataset.family || '';
+    for (var i = 0; i < chips.children.length; i++) {
+      chips.children[i].classList.remove('selected');
+    }
+    chip.classList.add('selected');
+  });
+
+  var boxes = document.querySelectorAll('.lang-grid input[type=checkbox]');
+  document.getElementById('lang-select-all').addEventListener('click', function() {
+    for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+  });
+  document.getElementById('lang-clear').addEventListener('click', function() {
+    for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+  });
+})();
 
 function loadFromStorage() {
   var token = localStorage.getItem('sd_gh_token') || '';
@@ -264,7 +343,14 @@ async function submitTask() {
 
   var dubFilterEl = document.querySelector('input[name="dub-filter"]:checked');
   var dub_filter = dubFilterEl ? dubFilterEl.value : 'ai';
-  var task = { material_name: name, dub_filter: dub_filter, created_at: ts, status: 'pending' };
+  var target_langs = Array.prototype.map.call(
+    document.querySelectorAll('.lang-grid input:checked'),
+    function(el) { return el.dataset.code; }
+  );
+  var task = { material_name: name, dub_filter: dub_filter,
+    target_langs: target_langs, banner_font: selectedFont || '',
+    summary_enabled: document.getElementById('summary-toggle').checked,
+    created_at: ts, status: 'pending' };
   var json = JSON.stringify(task, null, 2);
   var content = btoa(unescape(encodeURIComponent(json)));
 
