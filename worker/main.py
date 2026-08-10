@@ -172,6 +172,7 @@ def poll_and_execute() -> None:
         banner_font = task.get("banner_font") or None
         lang_fonts = task.get("lang_fonts") or None
         summary_enabled = bool(task.get("summary_enabled", True))
+        upload_folder_id = task.get("upload_folder_id") or None
         result = replicate(
             material_name=material_name,
             netshort_token=config["netshort_token"],
@@ -183,6 +184,7 @@ def poll_and_execute() -> None:
             banner_font=banner_font,
             lang_fonts=lang_fonts,
             summary_enabled=summary_enabled,
+            upload_folder_id=upload_folder_id,
             skip_upload=config["skip_upload"],
         )
         result["material_name"] = material_name
