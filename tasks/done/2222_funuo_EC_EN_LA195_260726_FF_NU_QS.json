@@ -1,0 +1,53 @@
+{
+  "material_name": "2222_funuo_EC_EN_LA195_260726_FF_NU_QS",
+  "dub_filter": "ai",
+  "target_langs": [
+    "es_ES",
+    "ms_MY",
+    "ko_KR",
+    "de_DE"
+  ],
+  "lang_fonts": {
+    "zh_TW": "YaoTi",
+    "en": "Verdana",
+    "ko": "Dokdo",
+    "id": "Mellow",
+    "ms": "Mellow",
+    "vi": "Awelier",
+    "es": "Awelier",
+    "fr": "Oliver",
+    "it": "Oliver",
+    "de": "Oliver",
+    "pt": "Awelier"
+  },
+  "summary_enabled": true,
+  "created_at": "2026-08-10T15:14:38+08:00",
+  "status": "done",
+  "started_at": "2026-08-10T15:17:04+08:00",
+  "worker_id": "DESKTOP-1M713GQ:9976",
+  "source_lang": "en_US",
+  "detected_lang": "en",
+  "results": [
+    {
+      "lang": "es_ES",
+      "file": "604_KAHUI_YP_ES_PA547_7-8_123360_307578_260810_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "ms_MY",
+      "file": "603_KAHUI_YP_MS_PA547_7-8_114760_295294_260810_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "ko_KR",
+      "file": "605_KAHUI_YP_KO_PA547_7-8_118560_298044_260810_AI复刻.mp4",
+      "status": "local_only"
+    },
+    {
+      "lang": "de_DE",
+      "file": "606_KAHUI_YP_DE_PA547_7-8_114460_294456_260810_AI复刻.mp4",
+      "status": "local_only"
+    }
+  ],
+  "finished_at": "2026-08-10T15:17:07+08:00"
+}
