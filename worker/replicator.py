@@ -2150,6 +2150,15 @@ def _summarize_target_errors(results: list[dict[str, Any]], max_distinct: int = 
     return "; errors: " + ", ".join(parts)
 
 
+class _TargetSkipped(Exception):
+    """Raised when a target should not be produced (e.g. no title to burn)."""
+
+    def __init__(self, lang: str, reason: str):
+        super().__init__(f"{lang}: {reason}")
+        self.lang = lang
+        self.reason = reason
+
+
 def replicate(
     material_name: str,
     netshort_token: str,
@@ -2405,6 +2414,12 @@ def replicate(
             target_id = target["shortPlayId"]
             target_remark = target["remark"] or "XX"
 
+            # Skip targets with no title: a clip without the top title banner
+            # is not a valid output (user decision 08-10). Checked before any
+            # download/frame-match work so a titless language costs nothing.
+            if not _clean_title(target.get("shortPlayName", "")):
+                raise _TargetSkipped(target_lang, "no shortPlayName (no title to burn)")
+
             resume_path = resume_map.get(str(target_id))
             if resume_path and os.path.exists(resume_path):
                 logger.info("%s: resume — reusing existing clip %s",
@@ -2551,6 +2566,8 @@ def replicate(
             for attempt in range(2):
                 try:
                     return process_target(target)
+                except _TargetSkipped:
+                    raise  # intentional skip: no retry
                 except Exception as e:
                     last_err = str(e)
                     logger.warning("Failed for %s (attempt %d/2): %s",
@@ -2566,6 +2583,12 @@ def replicate(
                 _check_deadline("stage3")
                 try:
                     clip_files.append(fut.result())
+                except _TargetSkipped as e:
+                    results.append({
+                        "lang": e.lang, "file": None,
+                        "status": "skipped", "reason": e.reason,
+                    })
+                    logger.info("Skipped %s: %s", e.lang, e.reason)
                 except Exception as e:
                     results.append({
                         "lang": target["language"], "file": None,
@@ -2573,9 +2596,12 @@ def replicate(
                     })
 
         if not clip_files:
+            skipped_n = sum(1 for r in results if r.get("status") == "skipped")
+            failed_n = len(results) - skipped_n
             raise RuntimeError(
                 "No clip replicated successfully"
-                + (f"; {len(results)} language(s) failed" if results else "")
+                + (f"; {failed_n} language(s) failed" if failed_n else "")
+                + (f"; {skipped_n} language(s) skipped (no title)" if skipped_n else "")
                 + _summarize_target_errors(results)
             )
 
