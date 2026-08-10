@@ -1256,6 +1256,7 @@ def _prepare_ending_for_concat(ending_path: str, video_path: str, work_dir: str)
 _BANNER_FONT_CACHE: dict[str, str] = {}
 
 # User-pickable banner fonts (frontend chips send the CSS family name).
+# The MADE fonts live in the repo fonts/ dir; the rest are Windows system fonts.
 _FONT_PICKER = {
     "Microsoft YaHei": "C:/Windows/Fonts/msyh.ttc",
     "SimHei": "C:/Windows/Fonts/simhei.ttf",
@@ -1266,6 +1267,14 @@ _FONT_PICKER = {
     "Yu Gothic": "C:/Windows/Fonts/YuGothM.ttc",
     "Arial": "C:/Windows/Fonts/arial.ttf",
     "Times New Roman": "C:/Windows/Fonts/times.ttf",
+    "Verdana": "C:/Windows/Fonts/verdana.ttf",
+    "Georgia": "C:/Windows/Fonts/georgia.ttf",
+    "Oliver": str(_PROJECT_ROOT / "fonts" / "oliver" / "Oliver-Regular.ttf"),
+    "Mellow": str(_PROJECT_ROOT / "fonts" / "mellow" / "MADEMellowPERSONALUSE-Regular.otf"),
+    "Awelier": str(_PROJECT_ROOT / "fonts" / "awelier" / "MADEAwelierPERSONALUSE-Regular.otf"),
+    "Blossom": str(_PROJECT_ROOT / "fonts" / "blossom" / "Blossom.ttf"),
+    "Dokdo": str(_PROJECT_ROOT / "fonts" / "rixdokdo" / "Dokdo-Regular.ttf"),
+    "YaoTi": str(_PROJECT_ROOT / "fonts" / "yaoti" / "方正姚体_GBK.ttf"),
 }
 
 
@@ -1305,6 +1314,35 @@ _PICKER_SCRIPT_COVERAGE = {
     "Malgun Gothic": {"cjk", "hangul"},
     "Arial": {"arabic", "vietnamese"},
     "Times New Roman": {"arabic", "vietnamese"},
+    "Verdana": {"vietnamese"},
+    "Dokdo": {"hangul"},
+    "YaoTi": {"cjk"},
+}
+
+# Per-language banner font lists (one language may use several fonts, from the
+# NetShort font-picker screenshots). First family that exists AND covers the
+# language's script wins as the default; "" is a sentinel meaning "use the
+# legacy per-language default" (e.g. ja/ko get their native fonts first, hi/
+# th/ar fall through to system fonts for Devanagari/Thai/Arabic). The MADE
+# fonts (Oliver/Mellow/Awelier/Blossom) are latin-only, so they are listed
+# only for latin languages.
+_LANG_FONTS: dict[str, list[str]] = {
+    "hi": [""],
+    "id": ["Mellow", "Blossom", "Awelier", "Georgia", ""],
+    "tr": ["Mellow", "Awelier", "Georgia", ""],
+    "de": ["Oliver", "Awelier", "Blossom", "Georgia", ""],
+    "it": ["Oliver", "Awelier", "Blossom", "Georgia", ""],
+    "fr": ["Oliver", "Awelier", "Georgia", "Blossom", ""],
+    "ja": [""],
+    "th": [""],
+    "zh_tw": ["YaoTi", ""],
+    "en": ["Verdana", "Awelier", "Blossom", "Georgia", ""],
+    "pt": ["Awelier", "Blossom", "Georgia", ""],
+    "es": ["Awelier", "Blossom", "Georgia", ""],
+    "vi": ["", "Awelier"],
+    "ar": [""],
+    "ko": ["Dokdo", ""],
+    "ms": ["Mellow", "Blossom", "Awelier", "Georgia", ""],
 }
 
 
@@ -1340,10 +1378,16 @@ _LANG_NAMES = {
 # Scripts whose words are space-separated; used to pick the summary max line
 # width (Latin ~24 chars fit 1080px at fontsize 46, compact scripts ~12).
 def _banner_font_for(lang: str) -> str:
-    """Resolve a per-language font file, falling back to a system CJK font."""
-    lang2 = (lang or "").split("_")[0].lower()
-    if lang2 in _BANNER_FONT_CACHE:
-        return _BANNER_FONT_CACHE[lang2]
+    """Resolve the per-language default font.
+
+    Priority: BANNER_FONT_DIR override -> first _LANG_FONTS entry that exists
+    and covers the language's script -> _LANG_DEFAULT_FONT -> system CJK font.
+    A "" entry in _LANG_FONTS means "no preferred font, use the system default".
+    """
+    lang_lower = (lang or "").lower()
+    lang2 = lang_lower.split("_")[0]
+    if lang_lower in _BANNER_FONT_CACHE:
+        return _BANNER_FONT_CACHE[lang_lower]
     font = ""
     font_dir = os.environ.get("BANNER_FONT_DIR", "") or ""
     if font_dir:
@@ -1353,6 +1397,13 @@ def _banner_font_for(lang: str) -> str:
             cand = os.path.join(font_dir, f"{lang2}{ext}")
             if os.path.exists(cand):
                 font = cand
+                break
+    if not font:
+        for family in _LANG_FONTS.get(lang_lower, _LANG_FONTS.get(lang2, [])):
+            if not family:
+                break  # sentinel: fall through to the system default
+            if _resolve_banner_font(family, lang):
+                font = _FONT_PICKER[family]
                 break
     if not font:
         font = _LANG_DEFAULT_FONT.get(lang2, "")
@@ -1367,7 +1418,7 @@ def _banner_font_for(lang: str) -> str:
             if os.path.exists(cand):
                 font = cand
                 break
-    _BANNER_FONT_CACHE[lang2] = font
+    _BANNER_FONT_CACHE[lang_lower] = font
     return font
 
 
@@ -2110,6 +2161,7 @@ def replicate(
     dub_filter: str = "ai",
     target_langs: list[str] | None = None,
     banner_font: str | None = None,
+    lang_fonts: dict[str, str] | None = None,
     summary_enabled: bool = True,
 ) -> dict[str, Any]:
     """Replicate a viral clip into dubbed language versions.
@@ -2129,6 +2181,9 @@ def replicate(
     or full "{lang}_{REGION}" form). Empty/None = all available targets.
     banner_font: CSS family name of a user-picked banner font; empty/unknown
     falls back to the per-language default.
+    lang_fonts: optional {lang -> CSS family} overrides, e.g. {"de_DE": "Oliver"}.
+    A matching override wins over banner_font for that language; keys may be a
+    full "{lang}_{REGION}" code or a 2-letter prefix.
     summary_enabled: when False, skip the doubao plot summary (title still
     burns); requires BANNER_BURN_ENABLED=1 too.
     """
@@ -2463,9 +2518,13 @@ def replicate(
             banner_summary = None
             if summary_enabled and os.environ.get("BANNER_BURN_ENABLED", "1") == "1":
                 banner_summary = _doubao_summarize(source_text, target_lang)
-            # Per-language: '' -> per-language default; a picked font lacking the
-            # target's script (e.g. SimHei for Thai) is ignored to avoid tofu.
-            banner_font_path = _resolve_banner_font(banner_font, target_lang)
+            # Per-language: a lang_fonts override wins, then the global pick;
+            # '' -> per-language default; a picked font lacking the target's
+            # script (e.g. SimHei for Thai) is ignored to avoid tofu.
+            family = ((lang_fonts or {}).get(target_lang)
+                      or (lang_fonts or {}).get(target_lang.split("_")[0])
+                      or banner_font)
+            banner_font_path = _resolve_banner_font(family, target_lang)
             cut_and_assemble(
                 editor, concat_path,
                 precise_start_ms, precise_end_ms,
