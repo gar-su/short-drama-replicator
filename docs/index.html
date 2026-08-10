@@ -56,11 +56,6 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 .lang-grid label { display: inline-block; margin: 0 14px 6px 0; cursor: pointer; white-space: nowrap; }
 .lang-grid input { width: auto; margin-right: 4px; vertical-align: -2px; }
 .hint-note { font-size: 12px; color: #999; margin: 2px 0 8px; }
-.font-row { margin-bottom: 12px; font-size: 13px; color: #555; }
-.font-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.font-chip { border: 1px solid #d9d9d9; background: #fff; color: #333; border-radius: 6px; padding: 6px 12px; font-size: 15px; cursor: pointer; }
-.font-chip:hover { border-color: #4a90d9; }
-.font-chip.selected { border-color: #4a90d9; background: #eef4fb; color: #4a90d9; box-shadow: 0 0 0 1px #4a90d9; }
 .opt-check { margin: 4px 0 12px; font-size: 13px; color: #555; }
 .opt-check input { width: auto; margin-right: 6px; vertical-align: -2px; }
 .lang-font-details { margin: 4px 0 12px; font-size: 13px; color: #555; }
@@ -176,22 +171,6 @@ button:disabled { background: #bbb; cursor: not-allowed; }
         <label><input type="checkbox" data-code="my"> 缅甸语</label>
         <div class="hint-note">不选 = 生成全部可用语种；全选后取消勾选即可排除个别语种</div>
       </div>
-      <div class="font-row">
-        <span class="dub-filter-label">烧录字体：</span>
-        <div class="font-chips" id="font-chips">
-          <button type="button" class="font-chip selected" data-family="">默认</button>
-          <button type="button" class="font-chip" data-family="Microsoft YaHei" style="font-family:'Microsoft YaHei'">微软雅黑</button>
-          <button type="button" class="font-chip" data-family="SimHei" style="font-family:'SimHei'">黑体</button>
-          <button type="button" class="font-chip" data-family="SimSun" style="font-family:'SimSun'">宋体</button>
-          <button type="button" class="font-chip" data-family="Microsoft JhengHei" style="font-family:'Microsoft JhengHei'">正黑体</button>
-          <button type="button" class="font-chip" data-family="DengXian" style="font-family:'DengXian'">等线</button>
-          <button type="button" class="font-chip" data-family="Malgun Gothic" style="font-family:'Malgun Gothic'">맑은 고딕</button>
-          <button type="button" class="font-chip" data-family="Yu Gothic" style="font-family:'Yu Gothic'">游ゴシック</button>
-          <button type="button" class="font-chip" data-family="Arial" style="font-family:'Arial'">Arial</button>
-          <button type="button" class="font-chip" data-family="Times New Roman" style="font-family:'Times New Roman'">Times</button>
-        </div>
-        <div class="hint-note">选中的字体也用于字幕；所选字体若不含某语种文字（如泰语/阿拉伯语/韩语），自动改用该语种默认字体，避免乱码</div>
-      </div>
       <details class="lang-font-details">
         <summary>按语种选择字体（默认自动，展开可对单个语种指定）</summary>
         <div class="lang-font-grid" id="lang-font-grid"></div>
@@ -220,7 +199,6 @@ var GH_REPO = 'gar-su/short-drama-replicator';
 var GH_API = 'https://api.github.com/repos';
 
 var pollTimer = null;
-var selectedFont = '';
 // Per-language font overrides: {langCode: CSS family}. Lang codes match the
 // .lang-grid data-code values (zh_CN/zh_TW full, others 2-letter).
 var langFonts = {};
@@ -244,17 +222,6 @@ var LANG_NAMES = { 'zh_CN':'简体中文', 'zh_TW':'繁體中文', 'en':'英语'
   'ru':'俄语', 'ar':'阿拉伯语', 'hi':'印地语', 'tl':'菲律宾语', 'bn':'孟加拉语', 'my':'缅甸语' };
 
 (function() {
-  var chips = document.getElementById('font-chips');
-  chips.addEventListener('click', function(ev) {
-    var chip = ev.target.closest ? ev.target.closest('.font-chip') : null;
-    if (!chip) return;
-    selectedFont = chip.dataset.family || '';
-    for (var i = 0; i < chips.children.length; i++) {
-      chips.children[i].classList.remove('selected');
-    }
-    chip.classList.add('selected');
-  });
-
   var boxes = document.querySelectorAll('.lang-grid input[type=checkbox]');
   document.getElementById('lang-select-all').addEventListener('click', function() {
     for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
@@ -263,22 +230,34 @@ var LANG_NAMES = { 'zh_CN':'简体中文', 'zh_TW':'繁體中文', 'en':'英语'
     for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
   });
 
-  // Build the per-language font grid. "默认（自动）" stores nothing; picking a
-  // font records it in langFonts for that language (overrides the global pick).
+  // Build the per-language font grid. Each language defaults to the FIRST font
+  // in its list (recorded in langFonts); languages with no pickable font leave
+  // the worker's default.
   var grid = document.getElementById('lang-font-grid');
   var gridHtml = '';
   for (var code in LANG_FONT_OPTIONS) {
+    var fams = LANG_FONT_OPTIONS[code];
+    var opts = '';
+    if (fams.length === 0) {
+      opts = '<option value="">系统默认</option>';
+    } else {
+      for (var i = 0; i < fams.length; i++) {
+        opts += '<option value="' + fams[i] + '"' + (i === 0 ? ' selected' : '') + '>' +
+                (FONT_LABELS[fams[i]] || fams[i]) + '</option>';
+      }
+    }
     gridHtml += '<div class="lang-font-item"><span class="lang-font-name">' +
       (LANG_NAMES[code] || code) + '</span><select data-code="' + code + '">' +
-      '<option value="">默认（自动）</option>';
-    var fams = LANG_FONT_OPTIONS[code];
-    for (var i = 0; i < fams.length; i++) {
-      var fam = fams[i];
-      gridHtml += '<option value="' + fam + '">' + (FONT_LABELS[fam] || fam) + '</option>';
-    }
-    gridHtml += '</select></div>';
+      opts + '</select></div>';
   }
   grid.innerHTML = gridHtml;
+  // Record each language's preselected font as its default override.
+  var selEls = grid.querySelectorAll('select[data-code]');
+  for (var s = 0; s < selEls.length; s++) {
+    var _sel = selEls[s];
+    if (_sel.value) langFonts[_sel.dataset.code] = _sel.value;
+    else delete langFonts[_sel.dataset.code];
+  }
   grid.addEventListener('change', function(ev) {
     var sel = ev.target.closest ? ev.target.closest('select[data-code]') : null;
     if (!sel) return;
@@ -403,7 +382,7 @@ async function submitTask() {
     function(el) { return el.dataset.code; }
   );
   var task = { material_name: name, dub_filter: dub_filter,
-    target_langs: target_langs, banner_font: selectedFont || '',
+    target_langs: target_langs,
     lang_fonts: langFonts,
     summary_enabled: document.getElementById('summary-toggle').checked,
     created_at: ts, status: 'pending' };
