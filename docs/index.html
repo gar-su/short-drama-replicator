@@ -63,6 +63,12 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 .font-chip.selected { border-color: #4a90d9; background: #eef4fb; color: #4a90d9; box-shadow: 0 0 0 1px #4a90d9; }
 .opt-check { margin: 4px 0 12px; font-size: 13px; color: #555; }
 .opt-check input { width: auto; margin-right: 6px; vertical-align: -2px; }
+.lang-font-details { margin: 4px 0 12px; font-size: 13px; color: #555; }
+.lang-font-details summary { cursor: pointer; color: #4a90d9; font-weight: 500; }
+.lang-font-grid { margin-top: 8px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 8px 10px; }
+.lang-font-item { display: flex; align-items: center; margin-bottom: 6px; }
+.lang-font-item .lang-font-name { width: 96px; flex: 0 0 96px; color: #666; }
+.lang-font-item select { flex: 1; max-width: 320px; padding: 4px 6px; font-size: 13px; border: 1px solid #d9d9d9; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -186,6 +192,10 @@ button:disabled { background: #bbb; cursor: not-allowed; }
         </div>
         <div class="hint-note">选中的字体也用于字幕；所选字体若不含某语种文字（如泰语/阿拉伯语/韩语），自动改用该语种默认字体，避免乱码</div>
       </div>
+      <details class="lang-font-details">
+        <summary>按语种选择字体（默认自动，展开可对单个语种指定）</summary>
+        <div class="lang-font-grid" id="lang-font-grid"></div>
+      </details>
       <div class="opt-check">
         <label><input type="checkbox" id="summary-toggle" checked> 生成 AI 剧情总结（底部）</label>
       </div>
@@ -211,6 +221,27 @@ var GH_API = 'https://api.github.com/repos';
 
 var pollTimer = null;
 var selectedFont = '';
+// Per-language font overrides: {langCode: CSS family}. Lang codes match the
+// .lang-grid data-code values (zh_CN/zh_TW full, others 2-letter).
+var langFonts = {};
+
+// Fonts each language uses (from the NetShort font-picker screenshots). An
+// empty list means "only 默认"; the worker falls back to a script-capable font
+// if a picked one can't render that language's script.
+var FONT_LABELS = { Oliver:'Oliver', Mellow:'Mellow', Awelier:'Awelier',
+  Blossom:'Blossom', Dokdo:'Dokdo', YaoTi:'姚体', Verdana:'Verdana', Georgia:'Georgia' };
+var LANG_FONT_OPTIONS = {
+  'zh_CN': [], 'zh_TW': ['YaoTi'], 'en': ['Verdana','Awelier','Blossom','Georgia'],
+  'ja': [], 'ko': ['Dokdo'], 'id': ['Mellow','Blossom','Awelier','Georgia'],
+  'ms': ['Mellow','Blossom','Awelier','Georgia'], 'th': [], 'vi': ['Awelier'],
+  'es': ['Awelier','Blossom','Georgia'], 'fr': ['Oliver','Awelier','Georgia','Blossom'],
+  'it': ['Oliver','Awelier','Blossom','Georgia'], 'de': ['Oliver','Awelier','Blossom','Georgia'],
+  'pt': ['Awelier','Blossom','Georgia'], 'ru': [], 'ar': [], 'hi': [], 'tl': [], 'bn': [], 'my': []
+};
+var LANG_NAMES = { 'zh_CN':'简体中文', 'zh_TW':'繁體中文', 'en':'英语', 'ja':'日语',
+  'ko':'韩语', 'id':'印尼语', 'ms':'马来语', 'th':'泰语', 'vi':'越南语',
+  'es':'西班牙语', 'fr':'法语', 'it':'意大利语', 'de':'德语', 'pt':'葡萄牙语',
+  'ru':'俄语', 'ar':'阿拉伯语', 'hi':'印地语', 'tl':'菲律宾语', 'bn':'孟加拉语', 'my':'缅甸语' };
 
 (function() {
   var chips = document.getElementById('font-chips');
@@ -230,6 +261,30 @@ var selectedFont = '';
   });
   document.getElementById('lang-clear').addEventListener('click', function() {
     for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+  });
+
+  // Build the per-language font grid. "默认（自动）" stores nothing; picking a
+  // font records it in langFonts for that language (overrides the global pick).
+  var grid = document.getElementById('lang-font-grid');
+  var gridHtml = '';
+  for (var code in LANG_FONT_OPTIONS) {
+    gridHtml += '<div class="lang-font-item"><span class="lang-font-name">' +
+      (LANG_NAMES[code] || code) + '</span><select data-code="' + code + '">' +
+      '<option value="">默认（自动）</option>';
+    var fams = LANG_FONT_OPTIONS[code];
+    for (var i = 0; i < fams.length; i++) {
+      var fam = fams[i];
+      gridHtml += '<option value="' + fam + '">' + (FONT_LABELS[fam] || fam) + '</option>';
+    }
+    gridHtml += '</select></div>';
+  }
+  grid.innerHTML = gridHtml;
+  grid.addEventListener('change', function(ev) {
+    var sel = ev.target.closest ? ev.target.closest('select[data-code]') : null;
+    if (!sel) return;
+    var code = sel.dataset.code;
+    if (sel.value) langFonts[code] = sel.value;
+    else delete langFonts[code];
   });
 })();
 
@@ -349,6 +404,7 @@ async function submitTask() {
   );
   var task = { material_name: name, dub_filter: dub_filter,
     target_langs: target_langs, banner_font: selectedFont || '',
+    lang_fonts: langFonts,
     summary_enabled: document.getElementById('summary-toggle').checked,
     created_at: ts, status: 'pending' };
   var json = JSON.stringify(task, null, 2);
