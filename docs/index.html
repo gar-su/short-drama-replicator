@@ -58,6 +58,7 @@ button:disabled { background: #bbb; cursor: not-allowed; }
 .hint-note { font-size: 12px; color: #999; margin: 2px 0 8px; }
 .opt-check { margin: 4px 0 12px; font-size: 13px; color: #555; }
 .opt-check input { width: auto; margin-right: 6px; vertical-align: -2px; }
+.opt-check select { width: auto; margin-right: 6px; max-width: 260px; }
 .lang-font-details { margin: 4px 0 12px; font-size: 13px; color: #555; }
 .lang-font-details summary { cursor: pointer; color: #4a90d9; font-weight: 500; }
 .lang-font-grid { margin-top: 8px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 8px 10px; }
@@ -178,6 +179,14 @@ button:disabled { background: #bbb; cursor: not-allowed; }
       <div class="opt-check">
         <label><input type="checkbox" id="summary-toggle" checked> 生成 AI 剧情总结（底部）</label>
       </div>
+      <div class="opt-check">
+        <label for="upload-folder">上传至：</label>
+        <select id="upload-folder">
+          <option value="">请选择业务方</option>
+          <option value="153421">AI复刻素材for天儿</option>
+          <option value="153422">AI复刻素材for爽子</option>
+        </select>
+      </div>
       <input type="text" id="material-input" placeholder="输入素材名称" onkeydown="if(event.key==='Enter')submitTask()">
       <button id="submit-btn" onclick="submitTask()">提交</button>
       <div class="error-msg" id="submit-error"></div>
@@ -202,6 +211,9 @@ var pollTimer = null;
 // Per-language font overrides: {langCode: CSS family}. Lang codes match the
 // .lang-grid data-code values (zh_CN/zh_TW full, others 2-letter).
 var langFonts = {};
+
+// Business-party upload folders (NetShort folder id -> display name).
+var UPLOAD_FOLDERS = { 153421: 'AI复刻素材for天儿', 153422: 'AI复刻素材for爽子' };
 
 // Fonts each language uses (from the NetShort font-picker screenshots). An
 // empty list means "only 默认"; the worker falls back to a script-capable font
@@ -363,6 +375,10 @@ async function submitTask() {
 
   if (!name) { errEl.textContent = '请输入素材名称'; return; }
 
+  var uploadSel = document.getElementById('upload-folder');
+  var upload_folder_id = uploadSel ? parseInt(uploadSel.value, 10) : NaN;
+  if (!upload_folder_id) { errEl.textContent = '请选择上传至业务方（天儿/爽子）'; return; }
+
   btn.disabled = true;
   errEl.textContent = '';
   okEl.textContent = '';
@@ -384,6 +400,7 @@ async function submitTask() {
   var task = { material_name: name, dub_filter: dub_filter,
     target_langs: target_langs,
     lang_fonts: langFonts,
+    upload_folder_id: upload_folder_id,
     summary_enabled: document.getElementById('summary-toggle').checked,
     created_at: ts, status: 'pending' };
   var json = JSON.stringify(task, null, 2);
@@ -460,6 +477,10 @@ function renderTaskItem(task, status) {
   var dubLabel = dubLabels[task.dub_filter] || '';
   var html = '<div class="task-item"><strong>' + escapeHtml(task.material_name) + '</strong>';
   if (dubLabel) html += '<span class="dub-badge">' + dubLabel + '</span>';
+  if (task.upload_folder_id) {
+    var creatorName = UPLOAD_FOLDERS[task.upload_folder_id];
+    html += '<span class="dub-badge">创建方: ' + escapeHtml(creatorName || task.upload_folder_id) + '</span>';
+  }
   if (task.created_at) html += '<div class="time">' + escapeHtml(task.created_at) + '</div>';
   if (status === 'done' && task.results) {
     var langs = task.results.filter(function(r) { return r.status === 'ok'; }).map(function(r) { return r.lang; });
