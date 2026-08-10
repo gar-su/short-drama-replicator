@@ -170,6 +170,7 @@ def poll_and_execute() -> None:
             dub_filter = "ai"
         target_langs = task.get("target_langs") or None
         banner_font = task.get("banner_font") or None
+        lang_fonts = task.get("lang_fonts") or None
         summary_enabled = bool(task.get("summary_enabled", True))
         result = replicate(
             material_name=material_name,
@@ -180,6 +181,7 @@ def poll_and_execute() -> None:
             dub_filter=dub_filter,
             target_langs=target_langs,
             banner_font=banner_font,
+            lang_fonts=lang_fonts,
             summary_enabled=summary_enabled,
             skip_upload=config["skip_upload"],
         )
