@@ -2030,8 +2030,11 @@ def upload_replicated_clips(
     target_languages: list[str],
     drama_language: str,
     drama_id: str,
-) -> list[dict[str, Any]]:
-    """Upload replicated clips to OSS and bind to replicate folder."""
+) -> tuple[list[dict[str, Any]], int]:
+    """Upload replicated clips to OSS and bind to replicate folder.
+
+    Returns (per-clip results, replicate_folder_id).
+    """
     sts_token = _retry(get_sts_token, client)
     replicate_folder_id = _retry(create_folder, replicate_folder_name, parent_folder_id, client)
 
@@ -2060,7 +2063,7 @@ def upload_replicated_clips(
             batch = resources[i : i + 20]
             _retry(bind_material, replicate_folder_id, batch, client)
 
-    return results
+    return results, replicate_folder_id
 
 
 # ---------------------------------------------------------------------------
@@ -2172,6 +2175,7 @@ def replicate(
     banner_font: str | None = None,
     lang_fonts: dict[str, str] | None = None,
     summary_enabled: bool = True,
+    upload_folder_id: int | None = None,
 ) -> dict[str, Any]:
     """Replicate a viral clip into dubbed language versions.
 
@@ -2195,6 +2199,11 @@ def replicate(
     full "{lang}_{REGION}" code or a 2-letter prefix.
     summary_enabled: when False, skip the doubao plot summary (title still
     burns); requires BANNER_BURN_ENABLED=1 too.
+    upload_folder_id: NetShort folder id of the business-party folder to upload
+    under (e.g. "AI复刻素材for天儿"=153421). When set, Stage 4 creates the
+    per-material subfolder {material_name}_复刻 under it, uploads OSS and binds.
+    When unset (and skip_upload=False), clips are kept local with status
+    "local_only" — there is no upload-to-the-material-folder fallback.
     """
     client = NetshortClient(token=netshort_token)
     editor = VideoEditor()
@@ -2205,7 +2214,6 @@ def replicate(
 
     material = _retry(search_material, client, material_name)
     source_lang = material["language"]
-    folder_id = material["folderId"]
     source_url = material["url"]
 
     # Resolve library name via the drama this material belongs to
@@ -2373,7 +2381,7 @@ def replicate(
             raise RuntimeError("Failed to extract reference frame hashes from source material")
         logger.info("Material head ref frames: %s", [t for t, _ in head_refs])
 
-        SEARCH_WINDOW_MS = 10_000
+        SEARCH_WINDOW_MS = 15_000
         FRAME_INTERVAL_MS = 1000
         # The material = drama content + an appended 片尾 (not part of the
         # drama). Its tail, the "hook", is the drama's final visual beat; the
@@ -2403,7 +2411,7 @@ def replicate(
             )
         logger.info("Material hook ref frames: %s", [t for t, _ in hook_refs])
 
-        # 3. Process each target — frame match within ±10s of expected position
+        # 3. Process each target — frame match within ±15s of expected position
         logger.info("[Stage 3/4] Processing %d target languages...", len(targets))
         results: list[dict[str, Any]] = []
         clip_files: list[dict[str, Any]] = []
@@ -2439,7 +2447,7 @@ def replicate(
             concat_path = os.path.join(concat_dir, f"target_{target_id}.mp4")
             _concat_videos(ep_paths, concat_path)
 
-            # Frame match: find precise start within ±10s of expected position
+            # Frame match: find precise start within ±15s of expected position
             # Probe video duration to cap search range
             probe = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -2605,19 +2613,34 @@ def replicate(
                 + _summarize_target_errors(results)
             )
 
-        # 4. Upload all clips (or skip for development)
+        # 4. Upload to the selected business-party folder (or skip)
         logger.info("[Stage 4/4] %d clips ready%s",
                      len(clip_files),
                      " (upload skipped)" if skip_upload else "")
+        upload_folder_info = None
         if clip_files and not skip_upload:
-            replicate_folder_name = f"{material_name}_复刻"
-            upload_results = upload_replicated_clips(
-                client, folder_id, replicate_folder_name,
-                clip_files, target_languages,
-                targets[0]["language"] if targets else source_lang,
-                targets[0]["shortPlayId"] if targets else material["videoId"],
-            )
-            results.extend(upload_results)
+            if upload_folder_id:
+                replicate_folder_name = f"{material_name}_复刻"
+                logger.info("Uploading %d clips to business folder %d/%s",
+                            len(clip_files), upload_folder_id, replicate_folder_name)
+                upload_results, replicate_folder_id = upload_replicated_clips(
+                    client, upload_folder_id, replicate_folder_name,
+                    clip_files, target_languages,
+                    targets[0]["language"] if targets else source_lang,
+                    targets[0]["shortPlayId"] if targets else material["videoId"],
+                )
+                results.extend(upload_results)
+                upload_folder_info = {
+                    "parent_id": upload_folder_id,
+                    "folder_id": replicate_folder_id,
+                    "name": replicate_folder_name,
+                }
+            else:
+                logger.warning(
+                    "No business folder selected (upload_folder_id unset), keeping files local"
+                )
+                for cf in clip_files:
+                    results.append({"lang": cf["lang"], "file": os.path.basename(cf["path"]), "status": "local_only"})
         elif clip_files:
             logger.info("Upload skipped (skip_upload=True), files kept in %s", output_dir)
             for cf in clip_files:
@@ -2628,6 +2651,7 @@ def replicate(
             "detected_lang": detected_lang,
             "target_langs": target_languages,
             "results": results,
+            "upload_folder": upload_folder_info,
         }
 
     finally:
