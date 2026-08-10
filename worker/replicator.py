@@ -2216,29 +2216,6 @@ def replicate(
 
     logger.info("Source: %s (lang=%s, library=%s)", material_name, source_lang, library_name)
 
-    targets = _retry(search_dubbed_dramas, client, library_name, source_lang)
-
-    if dub_filter not in ("ai", "human", "both"):
-        logger.warning("Unknown dub_filter=%r, falling back to 'ai'", dub_filter)
-        dub_filter = "ai"
-    targets = _filter_dubbed_targets(targets, dub_filter)
-
-    if target_langs:
-        wanted = {x.strip().lower() for x in target_langs if x}
-        targets = [
-            t for t in targets
-            if t["language"].split("_")[0].lower() in wanted
-            or t["language"].lower() in wanted
-        ]
-        if not targets:
-            logger.warning("target_langs=%r matched no dubbed targets", target_langs)
-
-    max_targets = int(os.environ.get("MAX_TARGETS", "0"))
-    if max_targets > 0 and len(targets) > max_targets:
-        logger.info("MAX_TARGETS=%d, processing first %d of %d target languages",
-                    max_targets, max_targets, len(targets))
-        targets = targets[:max_targets]
-
     # Resume support: reuse final clips produced by a previous (e.g. killed) run
     # for targets whose output already exists, so the re-run only processes the
     # remaining targets. Map key = target shortPlayId (unique; language+remark
@@ -2296,6 +2273,31 @@ def replicate(
         logger.info("[Stage 1/4] Source ASR: %d segments, %d chars, lead_in=%dms dur=%dms",
                      source_seg_count, len(source_text),
                      source_first_seg_start_ms, source_duration_ms)
+
+        # Target languages: exclude the whisper-detected source language, not
+        # the material label — the label is often wrong (e.g. a pt_PT label on
+        # English audio), which would otherwise produce a target in the real
+        # source language. Falls back to the label if detection gave nothing.
+        effective_source_lang = detected_lang or source_lang
+        targets = _retry(search_dubbed_dramas, client, library_name, effective_source_lang)
+        if dub_filter not in ("ai", "human", "both"):
+            logger.warning("Unknown dub_filter=%r, falling back to 'ai'", dub_filter)
+            dub_filter = "ai"
+        targets = _filter_dubbed_targets(targets, dub_filter)
+        if target_langs:
+            wanted = {x.strip().lower() for x in target_langs if x}
+            targets = [
+                t for t in targets
+                if t["language"].split("_")[0].lower() in wanted
+                or t["language"].lower() in wanted
+            ]
+            if not targets:
+                logger.warning("target_langs=%r matched no dubbed targets", target_langs)
+        max_targets = int(os.environ.get("MAX_TARGETS", "0"))
+        if max_targets > 0 and len(targets) > max_targets:
+            logger.info("MAX_TARGETS=%d, processing first %d of %d target languages",
+                        max_targets, max_targets, len(targets))
+            targets = targets[:max_targets]
 
         # 2. Find clip position in source drama via batch download + text matching
         logger.info("[Stage 2/4] Locating clip in source drama...")
@@ -2597,6 +2599,7 @@ def replicate(
 
         return {
             "source_lang": source_lang,
+            "detected_lang": detected_lang,
             "target_langs": target_languages,
             "results": results,
         }
