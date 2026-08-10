@@ -1,0 +1,28 @@
+{
+  "material_name": "262_xiaohou_EC_EN_LA423_260810_FF_NU",
+  "dub_filter": "both",
+  "target_langs": [
+    "ja",
+    "ko",
+    "id",
+    "ms",
+    "th",
+    "vi"
+  ],
+  "lang_fonts": {
+    "zh_TW": "YaoTi",
+    "en": "Verdana",
+    "ko": "Dokdo",
+    "id": "Mellow",
+    "ms": "Mellow",
+    "vi": "Awelier",
+    "es": "Awelier",
+    "fr": "Oliver",
+    "it": "Oliver",
+    "de": "Oliver",
+    "pt": "Awelier"
+  },
+  "summary_enabled": true,
+  "created_at": "2026-08-10T17:00:32+08:00",
+  "status": "pending"
+}
