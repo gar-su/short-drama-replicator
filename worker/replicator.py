@@ -471,6 +471,7 @@ def search_material(client: NetshortClient, material_name: str) -> dict[str, Any
         "folderId": mat["folderId"],
         "shortPlayName": mat.get("shortPlayName", ""),
         "widthAndHigh": resource.get("widthAndHigh", ""),
+        "createdTime": mat.get("createdTime") or resource.get("createdTime") or "",
     }
 
 
@@ -1968,19 +1969,32 @@ def _next_monthly_seq() -> int:
         return seq
 
 
+def _format_material_date(created_time: str) -> str:
+    """Platform createdTime like '2026-07-26 09:39:41' -> '260726' ('' if missing)."""
+    if not created_time:
+        return ""
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", created_time)
+    if not m:
+        return ""
+    return f"{m.group(1)[2:]}{m.group(2)}{m.group(3)}"
+
+
 def _build_replicate_filename(
     seq: int,
-    author: str,
+    brand: str,
     target_lang: str,
     drama_code: str,
     ep_start: int,
     ep_end: int,
     start_ms: int,
     end_ms: int,
+    material_date: str,
 ) -> str:
-    today = date.today().strftime("%y%m%d")
+    # material_date is the source material's creation date (yymmdd); fall back to
+    # today when the platform didn't return one.
+    date_str = material_date or date.today().strftime("%y%m%d")
     lang = target_lang[:2].upper()
-    return f"{seq}_{author}_YP_{lang}_{drama_code}_{ep_start}-{ep_end}_{start_ms}_{end_ms}_{today}_AI复刻.mp4"
+    return f"{seq}_{brand}_YP_{lang}_{drama_code}_{ep_start}-{ep_end}_{start_ms}_{end_ms}_{date_str}_AI复刻.mp4"
 
 
 def _upload_single_clip_replicate(
@@ -2215,6 +2229,12 @@ def replicate(
     material = _retry(search_material, client, material_name)
     source_lang = material["language"]
     source_url = material["url"]
+
+    # Output filename uses the source material's own brand (2nd underscore segment,
+    # e.g. 'funuo') and creation date, not our fixed author / run date.
+    _name_parts = material_name.split("_")
+    material_brand = _name_parts[1] if len(_name_parts) >= 2 else author
+    material_date = _format_material_date(material.get("createdTime", ""))
 
     # Resolve library name via the drama this material belongs to
     source_drama_info = _retry(client.get_short_play, material["videoId"])
@@ -2520,8 +2540,9 @@ def replicate(
 
             seq = _next_monthly_seq()
             filename = _build_replicate_filename(
-                seq, author, target_lang, target_remark,
+                seq, material_brand, target_lang, target_remark,
                 ep_start, ep_end, precise_start_ms, precise_end_ms,
+                material_date,
             )
             output_path = os.path.join(output_dir, filename)
             # Burn the drama's own subtitles only if it has a subtitle file
