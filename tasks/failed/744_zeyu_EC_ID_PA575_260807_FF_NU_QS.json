@@ -1,0 +1,28 @@
+{
+  "material_name": "744_zeyu_EC_ID_PA575_260807_FF_NU_QS",
+  "dub_filter": "ai",
+  "target_langs": [
+    "ja"
+  ],
+  "lang_fonts": {
+    "zh_TW": "YaoTi",
+    "en": "Verdana",
+    "ko": "Dokdo",
+    "id": "Mellow",
+    "ms": "Mellow",
+    "vi": "Awelier",
+    "es": "Awelier",
+    "fr": "Oliver",
+    "it": "Oliver",
+    "de": "Oliver",
+    "pt": "Awelier"
+  },
+  "upload_folder_id": 153421,
+  "summary_enabled": false,
+  "created_at": "2026-08-11T10:10:38+08:00",
+  "status": "failed",
+  "started_at": "2026-08-11T10:11:38+08:00",
+  "worker_id": "DESKTOP-1M713GQ:632",
+  "finished_at": "2026-08-11T10:11:41+08:00",
+  "error": "Material '744_zeyu_EC_ID_PA575_260807_FF_NU_QS' comes from AI-dubbed version (remark='PA575'); P-series (AI-dubbed) materials are not supported as replication input"
+}
