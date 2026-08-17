@@ -1,0 +1,41 @@
+{
+  "material_name": "262_xiaohou_EC_EN_LA423_260810_FF_NU",
+  "dub_filter": "ai",
+  "target_langs": [
+    "ja_JP"
+  ],
+  "lang_fonts": {
+    "zh_TW": "YaoTi",
+    "en": "Verdana",
+    "ko": "Dokdo",
+    "id": "Mellow",
+    "ms": "Mellow",
+    "vi": "Awelier",
+    "es": "Awelier",
+    "fr": "Oliver",
+    "it": "Oliver",
+    "de": "Oliver",
+    "pt": "Awelier"
+  },
+  "upload_folder_id": 153422,
+  "summary_enabled": true,
+  "created_at": "2026-08-17T11:47:28+08:00",
+  "status": "done",
+  "started_at": "2026-08-17T11:48:49+08:00",
+  "worker_id": "DESKTOP-1M713GQ:18600",
+  "source_lang": "en_US",
+  "detected_lang": "en",
+  "results": [
+    {
+      "lang": "ja_JP",
+      "file": "620_xiaohou_YP_JA_PA571_1-20_3900_1332001_260810_AI复刻.mp4",
+      "status": "ok"
+    }
+  ],
+  "upload_folder": {
+    "parent_id": 153422,
+    "folder_id": 158195,
+    "name": "262_xiaohou_EC_EN_LA423_260810_FF_NU_复刻"
+  },
+  "finished_at": "2026-08-17T11:48:52+08:00"
+}
