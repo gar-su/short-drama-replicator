@@ -1,0 +1,132 @@
+{
+  "material_name": "603_xianzi_EC_EN_BA4803_260807_FF_NU",
+  "dub_filter": "ai",
+  "target_langs": [
+    "ja_JP",
+    "tr_TR",
+    "zh_TW",
+    "hi_IN",
+    "es_ES",
+    "id_ID",
+    "ms_MY",
+    "fr_FR",
+    "de_DE",
+    "th_TH",
+    "ar_AE",
+    "vi_VN",
+    "ko_KR",
+    "it_IT",
+    "pt_PT",
+    "zh_CN"
+  ],
+  "lang_fonts": {
+    "zh_TW": "YaoTi",
+    "en": "Verdana",
+    "ko": "Dokdo",
+    "id": "Mellow",
+    "ms": "Mellow",
+    "vi": "Awelier",
+    "es": "Awelier",
+    "fr": "Oliver",
+    "it": "Oliver",
+    "de": "Oliver",
+    "pt": "Awelier"
+  },
+  "upload_folder_id": 153421,
+  "summary_enabled": true,
+  "created_at": "2026-08-17T14:56:10+08:00",
+  "status": "done",
+  "started_at": "2026-08-17T15:00:27+08:00",
+  "worker_id": "DESKTOP-1M713GQ:2128",
+  "source_lang": "en_US",
+  "detected_lang": "en",
+  "results": [
+    {
+      "lang": "zh_CN",
+      "file": null,
+      "status": "skipped",
+      "reason": "no shortPlayName (no title to burn)"
+    },
+    {
+      "lang": "id_ID",
+      "file": "626_xianzi_YP_ID_PA593_46-49_62320_246456_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "zh_TW",
+      "file": "623_xianzi_YP_ZH_PA593_46-49_67920_252056_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "hi_IN",
+      "file": "624_xianzi_YP_HI_PA593_46-49_63320_247456_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "tr_TR",
+      "file": "622_xianzi_YP_TR_PA593_46-49_59720_243856_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "ja_JP",
+      "file": "621_xianzi_YP_JA_PA593_46-49_60820_244956_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "es_ES",
+      "file": "625_xianzi_YP_ES_PA593_46-49_57920_242056_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "ms_MY",
+      "file": "627_xianzi_YP_MS_PA593_46-49_58620_242756_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "fr_FR",
+      "file": "628_xianzi_YP_FR_PA593_46-49_61520_245656_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "de_DE",
+      "file": "629_xianzi_YP_DE_PA593_46-49_61420_245556_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "th_TH",
+      "file": "630_xianzi_YP_TH_PA593_46-49_60620_244756_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "ar_AE",
+      "file": "631_xianzi_YP_AR_PA593_46-49_58920_243056_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "vi_VN",
+      "file": "632_xianzi_YP_VI_PA593_46-49_62920_247056_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "ko_KR",
+      "file": "633_xianzi_YP_KO_PA593_46-49_62520_246656_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "it_IT",
+      "file": "634_xianzi_YP_IT_PA593_46-49_60920_245056_260806_AI复刻.mp4",
+      "status": "ok"
+    },
+    {
+      "lang": "pt_PT",
+      "file": "635_xianzi_YP_PT_PA593_46-49_58820_242956_260806_AI复刻.mp4",
+      "status": "ok"
+    }
+  ],
+  "upload_folder": {
+    "parent_id": 153421,
+    "folder_id": 158363,
+    "name": "603_xianzi_EC_EN_BA4803_260807_FF_NU_复刻"
+  },
+  "finished_at": "2026-08-17T15:00:31+08:00"
+}
