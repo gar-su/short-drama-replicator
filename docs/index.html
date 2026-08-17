@@ -513,6 +513,11 @@ async function refreshKanban() {
     if (tasks.length === 0) {
       el.innerHTML = '<div class="empty-state">暂无</div>';
     } else {
+      tasks.sort(function(a, b) {
+        var at = Date.parse(a.created_at); if (isNaN(at)) at = 0;
+        var bt = Date.parse(b.created_at); if (isNaN(bt)) bt = 0;
+        return bt - at;
+      });
       el.innerHTML = tasks.map(function(t) { return renderTaskItem(t, s); }).join('');
     }
   }
