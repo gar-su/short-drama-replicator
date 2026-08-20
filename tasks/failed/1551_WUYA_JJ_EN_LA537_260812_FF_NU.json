@@ -1,0 +1,29 @@
+{
+  "material_name": "1551_WUYA_JJ_EN_LA537_260812_FF_NU",
+  "dub_filter": "ai",
+  "target_langs": [
+    "id",
+    "th"
+  ],
+  "lang_fonts": {
+    "zh_TW": "YaoTi",
+    "en": "Verdana",
+    "ko": "Dokdo",
+    "id": "Mellow",
+    "ms": "Mellow",
+    "vi": "Awelier",
+    "es": "Awelier",
+    "fr": "Oliver",
+    "it": "Oliver",
+    "de": "Oliver",
+    "pt": "Awelier"
+  },
+  "upload_folder_id": 153422,
+  "summary_enabled": true,
+  "created_at": "2026-08-19T15:46:02+08:00",
+  "status": "failed",
+  "started_at": "2026-08-20T18:47:31+08:00",
+  "worker_id": "DESKTOP-1M713GQ:15860",
+  "finished_at": "2026-08-20T18:47:34+08:00",
+  "error": "Failed after 3 attempts: [WinError 10060] 由于连接方在一段时间后没有正确答复或连接的主机没有反应，连接尝试失败。"
+}
